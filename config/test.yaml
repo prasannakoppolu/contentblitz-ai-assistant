@@ -1,0 +1,5 @@
+app:
+  use_mock: true
+  log_level: WARNING
+  max_retries: 0
+  retry_base_delay: 0

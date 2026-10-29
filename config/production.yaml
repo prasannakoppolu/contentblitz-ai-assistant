@@ -1,0 +1,8 @@
+# Production: stricter quality bar, more retries, two refinement passes.
+app:
+  log_level: INFO
+  max_retries: 4
+  retry_base_delay: 1.5
+  quality_threshold: 75
+  max_refinement_loops: 2
+  output_dir: /data/outputs

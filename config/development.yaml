@@ -1,0 +1,5 @@
+# Development: verbose logs, faster retries. Set CONTENTBLITZ_MOCK=1 to run offline.
+app:
+  log_level: DEBUG
+  max_retries: 2
+  retry_base_delay: 0.5
