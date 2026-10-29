@@ -3,7 +3,7 @@ services:
     build: .
     image: contentblitz:latest
     ports:
-      - "8501:8501"
+      - "8000:8000"
     env_file:
       - path: .env
         required: false
@@ -13,13 +13,6 @@ services:
     volumes:
       - contentblitz-data:/data
     restart: unless-stopped
-
-  tests:
-    build: .
-    profiles: ["test"]
-    environment:
-      APP_ENV: test
-    command: sh -c "pip install -q pytest pytest-cov && pytest --cov"
 
 volumes:
   contentblitz-data:

@@ -19,7 +19,9 @@
 | D6 | **Artefacts tagged with topic** | Prevents stale research/brief reuse when the user switches topics mid-conversation |
 | D7 | **Deterministic quality scoring** (rules + metrics), not LLM-as-judge | Cheap, explainable, testable; LLM judge could be added as an extra dimension |
 | D8 | **Error isolation per node** | A failed image doesn't lose the blog; dependants are skipped explicitly rather than running on missing inputs |
-| D9 | **Checkpointer memory** (MemorySaver/SqliteSaver) | Simple, no infra. Multi-instance deployments should switch to `PostgresSaver` |
+| D9 | **Checkpointer memory** (MemorySaver, or SqliteSaver via `CONTENTBLITZ_MEMORY=sqlite`) | Simple, no infra. Multi-instance deployments should switch to `PostgresSaver` |
+| D10 | **React SPA + FastAPI with SSE** (replacing Streamlit) | Two codebases (TS + Python) instead of one, but real-time agent progress, side-by-side editing, responsive layout and conventional deployment; the API is also reusable by other clients |
+| D11 | **Keys sent per request, engines cached by hashed config** | Keys travel with each call (HTTPS required in production) but are never stored server-side; LRU cap bounds memory |
 
 ## 3. Service integration patterns
 
@@ -33,7 +35,7 @@ Agent ──► ProviderChain.generate(...) ──► Provider A ──► HTTPP
   Configured per environment (`development`: 2 retries / 0.5s; `production`: 4 / 1.5s).
 - **Classification:** network / 429 / 5xx → retryable `ProviderError`/`RateLimitError`; 401/403/other 4xx → non-retryable.
 - **Observability:** every attempt is recorded (`chain.attempts`, `UsageTracker`) with provider, model, latency, tokens,
-  estimated cost; surfaced in the trace, the image "Provider attempts" table and the sidebar usage panel.
+  estimated cost; surfaced in the live pipeline, the image "Provider attempts" table and the Settings usage panel (`POST /api/usage`).
 - **Model tiers:** `fast` for routing, keywords, meta, hashtags and image prompts; `premium` for long-form.
 
 ## 4. Content quality validation & enhancement
@@ -47,7 +49,7 @@ Agent ──► ProviderChain.generate(...) ──► Provider A ──► HTTPP
 
 **Enhancement loop:** if a blog scores below `quality_threshold` (70 dev / 75 prod), the writer sends the top
 suggestions to an editor prompt and keeps the better version, up to `max_refinement_loops`. LinkedIn posts get a
-length-guard pass (expand/condense) before formatting. Human edits in the dashboard are re-scored instantly.
+length-guard pass (expand/condense) before formatting. Human edits saved in the Content tab are re-scored by the API immediately.
 
 **Brand voice:** a `BrandVoiceConfig` (tone, audience, style rules, banned phrases, preferred terms) is injected into
 every writer prompt and validated afterwards (banned/generic phrases, tone markers, passive ratio, second-person use).
@@ -65,7 +67,7 @@ Ambiguous requests with a topic default to a research report; greetings and topi
 
 ## 6. Scalability & performance
 
-- **Stateless engine + external checkpointer:** run multiple Streamlit/API replicas behind a load balancer with
+- **Stateless engine + external checkpointer:** run multiple API replicas behind a load balancer with
   `PostgresSaver` (LangGraph) for shared memory.
 - **Cache:** in-process TTL cache; swap for Redis to share across replicas (same `get/set` interface).
 - **Latency:** research sub-queries are independent and can be parallelised with a thread pool; image generation
@@ -78,6 +80,10 @@ Ambiguous requests with a topic default to a research report; greetings and topi
 
 ## 7. Security
 
-- Keys only from env/.env or session-only sidebar inputs; never logged or persisted.
+- Keys come from env/.env on the server, or from the browser: typed into Settings, held in the tab's memory only
+  (not localStorage) and sent with each request. The server hashes the provider configuration to select an engine
+  and never logs or persists keys. Serve over HTTPS in production.
+- The API strips server file paths from responses; images are served by filename with path-traversal checks.
+- CORS is limited to the Vite dev origins; production serves UI and API from one origin.
 - No user data in URLs except provider-required query params (SERP API key per their API).
 - Docker image runs as a non-root user; outputs on a dedicated volume.
