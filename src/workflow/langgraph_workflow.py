@@ -144,8 +144,9 @@ def compose_response(state: ContentState, produced: List[str], errors: List[Dict
                      + "\n\nOpen the **Content Dashboard** to preview, edit and export.")
     li = state.get("linkedin") or {}
     if "linkedin" in produced and li:
+        quoted = "\n".join(f"> {line}" if line.strip() else ">" for line in li["text"].splitlines())
         parts.append(f"💼 **LinkedIn post** ({li['char_count']} chars, {len(li['hashtags'])} hashtags, quality "
-                     f"{li['quality']['score']}/100):\n\n---\n{li['text']}\n---")
+                     f"{li['quality']['score']}/100):\n\n{quoted}")
     img = state.get("image") or {}
     if "image" in produced and img:
         note = " (offline placeholder; add an OpenAI/Stability key for AI images)" if img.get("provider") == "placeholder" else ""

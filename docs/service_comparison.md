@@ -48,7 +48,7 @@ ContentBlitz uses SERP first and lets Perplexity's pre-analysed answer enrich th
 | **Premium thought leadership** | Claude Sonnet → GPT-4o | Perplexity Sonar Pro → SERP | DALL-E 3 HD → Stability | ≈ $0.30-0.45 |
 | **High availability** | All three LLMs, multiple keys as extra providers | All three engines | All three image APIs | balanced + ~5% retries |
 
-Switch by editing `config/services.yaml` → `fallback_chains`/`models`, or the sidebar "Provider priority".
+Switch by editing `config/services.yaml` → `fallback_chains`/`models`, or in the app under Settings → **Providers and quality**.
 
 ## 5. Evaluation protocol (performance benchmarks)
 

@@ -1,5 +1,38 @@
 # API Documentation
 
+## HTTP API (`src/api/server.py`)
+
+Interactive OpenAPI docs: `http://localhost:8000/docs`. Conversation memory backend: `CONTENTBLITZ_MEMORY` (`memory` | `sqlite`).
+
+| Method & path | Body | Response |
+|---|---|---|
+| `GET /api/health` | – | `{status, time}` |
+| `GET /api/config` | – | detected key names, default demo mode, quality threshold, fallback chains, default brand voice |
+| `POST /api/threads` | – | `{thread_id}` |
+| `GET /api/threads/{tid}/state` | – | UI-safe state (messages, research, blog, linkedin, image with `src`, trace, …) |
+| `POST /api/threads/{tid}/chat` | `{message, settings}` | `text/event-stream` (below) |
+| `PUT /api/threads/{tid}/artifacts/blog` | `{markdown, meta_description}` | re-scored blog (revision +1) |
+| `PUT /api/threads/{tid}/artifacts/linkedin` | `{text}` | re-scored post |
+| `PUT /api/threads/{tid}/brand-voice` | `BrandVoice` | saved voice |
+| `POST /api/brand-voice/learn` | `{samples[], base?}` | learned `BrandVoice` (not saved) |
+| `POST /api/usage` | `settings` | calls, failures, tokens, cost, cache, provider chains, `offline` |
+| `GET /api/threads/{tid}/export/{artifact}/{fmt}` | – | download; `blog`/`report`: `md html txt pdf wxr`; `series`: `wxr`; `linkedin`: `txt json` |
+| `GET /api/images/{file}` | – | generated image |
+
+`settings` (`ClientSettings`): `{demo_mode?, api_keys{openai,anthropic,gemini,serpapi,perplexity,tavily,stability},
+llm_primary?, research_primary?, quality_threshold?}`. Omitted fields fall back to server config.
+
+**Chat stream events**
+
+```
+event: start  data: {"thread_id": "...", "providers": {"llm": [...], ...}, "offline": true}
+event: node   data: {"node": "query_handler", "trace": {...}, "plan": ["research","blog"], "topic": "..."}
+event: node   data: {"node": "research", "trace": {"agent":"research","status":"ok","detail":"10 sources via serpapi", ...}}
+...
+event: done   data: { full UI-safe state }
+event: error  data: {"message": "..."}        # stream ends after an error
+```
+
 ## Engine (`src/core/workflow.py`)
 
 ```python

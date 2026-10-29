@@ -123,6 +123,8 @@ class MockLLMProvider(LLMProvider):
         tone = ctx.get("tone", "professional")
         short = "short" in (ctx.get("feedback") or "").lower()
         part = ctx.get("part")
+        if kw.lower() == topic.lower():
+            kw = topic  # keep the user's casing (e.g. "B2B") in titles
         title = (f"{_title(ctx['angle'])} (Part {part[0]} of {part[1]})" if part and ctx.get("angle") else None) or {
             "listicle": f"7 Proven Ways to Win With {_title(kw)}",
             "comparison": f"{_title(kw)}: Comparing the Top Approaches",
