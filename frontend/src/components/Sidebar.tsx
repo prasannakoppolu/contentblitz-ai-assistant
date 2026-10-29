@@ -116,7 +116,7 @@ export function Sidebar(p: Props) {
       </details>
 
       <details className="side-group" open>
-        <summary>Usage this session</summary>
+        <summary>Usage since the server started</summary>
         {usage ? (
           <dl className="usage">
             <div><dt>API calls</dt><dd>{usage.calls}</dd></div>
@@ -125,7 +125,7 @@ export function Sidebar(p: Props) {
             <div><dt>Writing chain</dt><dd>{usage.providers.llm?.join(" → ")}</dd></div>
           </dl>
         ) : (
-          <p className="muted small">Usage appears after your first request.</p>
+          <p className="muted small">Usage appears after the first request.</p>
         )}
       </details>
 

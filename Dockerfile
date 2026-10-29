@@ -9,7 +9,8 @@ RUN npm run build
 # ---- Stage 2: Python API serving the built UI ----
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
-    CONTENTBLITZ_OUTPUT_DIR=/data/outputs
+    CONTENTBLITZ_OUTPUT_DIR=/data/outputs \
+    CONTENTBLITZ_MEMORY=sqlite CONTENTBLITZ_MEMORY_PATH=/data/contentblitz_memory.sqlite
 WORKDIR /app
 
 COPY requirements.txt .

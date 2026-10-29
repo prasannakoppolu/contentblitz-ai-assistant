@@ -87,8 +87,10 @@ context (research → brief → blog title used by LinkedIn & image).
 | `history` | conversation | `last_topic`, `last_agents`, `turn`, used for context-aware routing |
 | `brand_voice` | conversation | per-thread override set from the UI (manual or learned) |
 
-State is checkpointed per `thread_id` by LangGraph (`MemorySaver`, or `SqliteSaver` for persistence).
-Dashboard edits are written back with `graph.update_state(..., as_node="finalize")`.
+State is checkpointed per `thread_id` by LangGraph: `MemorySaver` by default, or `SqliteSaver` when
+`CONTENTBLITZ_MEMORY=sqlite` (the Docker default). The browser stores its `thread_id` and restores the conversation
+on reload. Edits saved in the Content tab arrive via `PUT /api/threads/{id}/artifacts/*` and are written back with
+`graph.update_state(..., as_node="finalize")`.
 
 ## 4. Sequence: research-first campaign
 

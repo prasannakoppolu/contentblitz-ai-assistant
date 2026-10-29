@@ -170,3 +170,32 @@ def test_spa_fallback_serves_index(tmp_path, monkeypatch):
     assert c.get("/dashboard/blog").text == "<div id=root></div>"
     assert c.get("/assets/app.js").status_code == 200
     assert c.get("/api/nope").status_code == 404
+
+
+def test_sqlite_memory_survives_restart(tmp_path, monkeypatch):
+    pytest.importorskip("langgraph.checkpoint.sqlite")
+    monkeypatch.setenv("CONTENTBLITZ_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setenv("CONTENTBLITZ_MEMORY", "sqlite")
+    monkeypatch.setenv("CONTENTBLITZ_MEMORY_PATH", str(tmp_path / "mem.sqlite"))
+    first = TestClient(create_app({"app": {"use_mock": True}}, env="test", serve_frontend=False))
+    chat(first, "keep", "Research hybrid work")
+    restarted = TestClient(create_app({"app": {"use_mock": True}}, env="test", serve_frontend=False))
+    assert restarted.get("/api/threads/keep/state").json()["topic"] == "hybrid work"
+
+
+def test_memory_falls_back_to_in_process_when_sqlite_missing(monkeypatch):
+    import builtins
+
+    from langgraph.checkpoint.memory import MemorySaver
+
+    from src.workflow.langgraph_workflow import make_checkpointer
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *a, **k):
+        if name.startswith("langgraph.checkpoint.sqlite"):
+            raise ImportError(name)
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    assert isinstance(make_checkpointer("sqlite", ":memory:"), MemorySaver)

@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import threading
 import time
 from collections import OrderedDict
@@ -34,11 +35,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from langgraph.checkpoint.memory import MemorySaver
 
 from src.api.schemas import BlogEdit, BrandVoice, ChatRequest, ClientSettings, LearnVoiceRequest, LinkedInEdit
 from src.core.config import PROJECT_ROOT, BrandVoiceConfig, Settings, load_settings
 from src.core.workflow import ContentBlitzEngine
+from src.workflow.langgraph_workflow import make_checkpointer
 from src.utils.content_optimization import analyze_seo
 from src.utils.export_tools import export_content, to_social_json, to_wordpress_wxr
 from src.utils.quality_validation import learn_brand_voice, score_blog, score_linkedin
@@ -63,7 +64,10 @@ class EngineRegistry:
                  checkpointer: Any = None, max_engines: int = 8):
         self.base_overrides = base_overrides or {}
         self.env = env
-        self.checkpointer = checkpointer or MemorySaver()
+        # CONTENTBLITZ_MEMORY=sqlite keeps conversations across restarts (needs langgraph-checkpoint-sqlite).
+        self.checkpointer = checkpointer or make_checkpointer(
+            os.getenv("CONTENTBLITZ_MEMORY", "memory"),
+            os.getenv("CONTENTBLITZ_MEMORY_PATH", str(PROJECT_ROOT / "contentblitz_memory.sqlite")))
         self.max_engines = max_engines
         self._engines: "OrderedDict[str, ContentBlitzEngine]" = OrderedDict()
         self._lock = threading.Lock()

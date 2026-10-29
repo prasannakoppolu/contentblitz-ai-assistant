@@ -2,7 +2,7 @@
 
 ## HTTP API (`src/api/server.py`)
 
-Interactive OpenAPI docs: `http://localhost:8000/docs`.
+Interactive OpenAPI docs: `http://localhost:8000/docs`. Conversation memory backend: `CONTENTBLITZ_MEMORY` (`memory` | `sqlite`).
 
 | Method & path | Body | Response |
 |---|---|---|

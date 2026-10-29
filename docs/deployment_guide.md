@@ -19,7 +19,8 @@ docker compose up --build              # UI + API on :8000, outputs on the conte
 ```
 
 The multi-stage image builds the React app with Node, then copies `frontend/dist` into a slim Python image that runs
-uvicorn as a non-root user, with a health check on `/api/health`. It defaults to `APP_ENV=production`.
+uvicorn as a non-root user, with a health check on `/api/health`. It defaults to `APP_ENV=production` and keeps
+generated images and conversation memory (SQLite) on the `/data` volume.
 
 ## 3. Split hosting (optional)
 
@@ -31,8 +32,9 @@ The SPA is static: you can host `frontend/dist` on Vercel/Netlify/S3 and run the
 
 - Deploy from the Dockerfile; set env vars in the dashboard; expose port 8000.
 - Mount a volume at `/data` to keep generated images.
-- For persistent conversation memory install `langgraph-checkpoint-sqlite` and use `ContentBlitzEngine(memory="sqlite")`
-  with the database on the volume, or use LangGraph's Postgres saver for multi-instance deployments.
+- Conversation memory persists in `/data/contentblitz_memory.sqlite` (the image sets `CONTENTBLITZ_MEMORY=sqlite`).
+  SQLite suits a single instance; for several replicas use LangGraph's Postgres saver (pass it as the registry's
+  `checkpointer`).
 
 ## 5. Environments
 
@@ -46,7 +48,7 @@ The SPA is static: you can host `frontend/dist` on Vercel/Netlify/S3 and run the
 ## 6. Monitoring & logging
 
 - Structured logs on the `contentblitz` logger (`LOG_LEVEL`). Provider failures and retries are logged at WARNING.
-- Usage/cost per session in the sidebar; `engine.usage()` exposes the same for scraping.
+- Usage and estimated cost per provider configuration since start-up: Settings panel, or `POST /api/usage`.
 - Health: `GET /api/health` (used by the Docker `HEALTHCHECK`).
 - Behind nginx, disable response buffering for `/api/threads/*/chat` (the API already sends `X-Accel-Buffering: no`).
 - Optional LangSmith tracing: `pip install langsmith` and set `LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_API_KEY`;

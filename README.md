@@ -25,11 +25,11 @@ conversational **React** interface (served by a FastAPI backend) with memory, qu
 | **LinkedIn engine** | Hook-first templates, 1,300-1,600 character window, 8-12 hashtags, CTA detection, line-break optimisation |
 | **Quality pipeline** | 0-100 scores per asset with sub-dimensions and suggestions; blogs below threshold are auto-refined |
 | **Brand voice** | Configurable tone/audience/banned phrases, consistency checks, and **voice learning from sample content** |
-| **Memory** | LangGraph checkpointer per conversation thread (in-memory or SQLite) |
+| **Memory** | LangGraph checkpointer per conversation thread: in-memory by default, SQLite (`CONTENTBLITZ_MEMORY=sqlite`, the Docker default) to survive restarts; the browser remembers its conversation and restores it on reload |
 | **Content series** | "Write a 3-part blog series about X" produces distinct, angle-driven parts |
 | **Export** | Markdown · HTML · Plain text · PDF · WordPress WXR (CMS import) · scheduler JSON (Buffer/Hootsuite) · PNG |
 | **Web UI** | React + TypeScript (Vite): chat with a live six-station agent pipeline, content editor with instant re-scoring, research panel with linked citations, exports, settings; responsive, dark mode |
-| **Testing** | 127 Python tests (unit / API / integration / e2e incl. real-browser Playwright), **95% coverage**, plus 16 Vitest component tests; CI on Python 3.11 & 3.12 |
+| **Testing** | 129 Python tests (unit / API / integration / e2e incl. real-browser Playwright), **95% coverage**, plus 16 Vitest component tests; CI on Python 3.11 & 3.12 |
 
 ---
 
@@ -129,6 +129,9 @@ Open http://localhost:8000. API keys can also be pasted into Settings; they stay
 | `APP_ENV` | `development` / `production` / `test`: selects `config/<env>.yaml` |
 | `CONTENTBLITZ_MOCK` | `1` forces offline mode |
 | `CONTENTBLITZ_OUTPUT_DIR` | Where images and metadata are saved (default `outputs/`) |
+| `CONTENTBLITZ_MEMORY` | `memory` (default) or `sqlite` to keep conversations across server restarts |
+| `CONTENTBLITZ_MEMORY_PATH` | SQLite file for conversation memory (default `contentblitz_memory.sqlite`; Docker: `/data/...`) |
+| `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` |
 
 ---
 
@@ -181,20 +184,24 @@ the live OpenAPI docs are at http://localhost:8000/docs.
   long-form writing uses **premium**. Edit tiers in `config/services.yaml`.
 - Research for a topic is **reused across turns**, so a follow-up blog/LinkedIn post doesn't re-search.
 - `max_refinement_loops` caps automatic rewrites (1 in dev, 2 in prod).
-- The Settings **Usage this session** panel shows calls, tokens, estimated USD and cache hit rate.
+- Settings → **Usage since the server started** shows API calls, estimated cost, cache hits and the active writing chain
+  for your provider configuration (`POST /api/usage` returns the full breakdown, including tokens).
 - For development, Gemini Flash's free tier plus Tavily's free tier is the cheapest live configuration.
 
 ## 🛠️ Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| Banner says *offline demo mode* | No keys detected or the toggle is on. Add keys to `.env` or the sidebar and switch the toggle off. |
+| Banner says *offline demo mode* | Offline mode is on (the default when the server has no keys). Add keys to `.env` or Settings → API keys, then untick **Offline demo mode** in Settings. |
+| Page says *ContentBlitz can't reach its server* | The API isn't running (or not on :8000 for `make web`). Start it with `uvicorn src.api.server:app --port 8000`. |
+| `{"detail":"Not Found"}` at http://localhost:8000/ | The UI isn't built. Run `cd frontend && npm ci && npm run build`, then restart the server. |
+| Agent progress arrives all at once behind a proxy | Disable response buffering for `/api/threads/*/chat` (see the deployment guide). |
 | Image shows a gradient card | All image providers failed or no key; check the *Provider attempts* table in Content → Image. |
 | `auth error 401` in the trace | Invalid key: auth errors are not retried, so the next provider is used. Fix the key. |
 | `rate limited (429)` warnings | Handled automatically with backoff; reduce concurrency or add another provider. |
 | Follow-up applied to the wrong piece | Name it explicitly: *"make the **blog** shorter"*. |
 | PDF export unavailable | `pip install reportlab`. |
-| Memory lost on restart | Install `langgraph-checkpoint-sqlite` and construct the engine with `memory="sqlite"`. |
+| Conversation gone after a server restart | Set `CONTENTBLITZ_MEMORY=sqlite` (already set in Docker). |
 
 ## 📚 Documentation
 

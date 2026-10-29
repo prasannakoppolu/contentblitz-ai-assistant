@@ -11,5 +11,5 @@ typing_extensions>=4.8
 # Images & export
 pillow>=10.0
 reportlab>=4.0
-# Optional: persistent conversation memory across restarts (memory="sqlite")
-# langgraph-checkpoint-sqlite>=2.0
+# Persistent conversation memory across restarts (enable with CONTENTBLITZ_MEMORY=sqlite)
+langgraph-checkpoint-sqlite>=2.0
