@@ -4,7 +4,8 @@
 
 | Layer | Modules | Responsibility |
 |---|---|---|
-| Presentation | `src/web_app/*`, `src/cli.py` | Chat, content dashboard (edit + re-score), research panel, export, settings |
+| Presentation | `frontend/` (React + TypeScript), `src/cli.py` | Chat with live pipeline, content editor (edit + re-score), research panel, export, settings |
+| API | `src/api/server.py`, `schemas.py` | REST + Server-Sent Events over the engine; per-settings engine registry; serves the built SPA |
 | Application | `src/core/workflow.py` (`ContentBlitzEngine`) | Facade: run/stream a turn, read state, persist human edits, usage |
 | Orchestration | `src/workflow/langgraph_workflow.py`, `state_management.py` | LangGraph `StateGraph`, routing function, error isolation, finalisation, memory |
 | Agents | `src/agents/*` | Six single-responsibility agents operating on shared state |
@@ -14,6 +15,30 @@
 
 Agents never import a vendor SDK. They receive a `Services` bundle (`llm`, `research`, `image` chains + cache + tracker),
 which keeps every agent unit-testable with mock providers and makes provider switching a config change.
+
+## 1b. Web request flow
+
+```mermaid
+sequenceDiagram
+    participant B as Browser (React)
+    participant A as FastAPI
+    participant R as EngineRegistry
+    participant G as LangGraph
+    B->>A: POST /api/threads/{id}/chat {message, settings}
+    A->>R: engine for these settings (cached, shared checkpointer)
+    A-->>B: event: start
+    loop each agent node
+        G-->>A: (node, update)
+        A-->>B: event: node {node, trace, plan?}
+    end
+    A-->>B: event: done {UI-safe state}
+    B->>A: PUT /api/threads/{id}/artifacts/blog (human edit)
+    A-->>B: re-scored artefact
+```
+
+The browser keeps API keys in memory and sends them with each request; the server hashes the provider
+configuration to pick (or build) an engine, so keys are never logged or persisted. Server file paths are stripped
+from the state; images are served through `/api/images/{file}` with path-traversal checks.
 
 ## 2. Graph
 
@@ -118,6 +143,7 @@ before the chain moves on. Every attempt is logged in `chain.attempts` and the `
 | LLM | GPT-4o (+ Claude Sonnet, Gemini Flash) | — | Strong JSON mode & writing; alternates add resilience and cost options |
 | Research | SERP API + LLM analysis | Perplexity Sonar, Tavily, You.com | Full control over sources and citation numbering; Perplexity/Tavily as fallbacks |
 | Images | DALL-E 3 | DALL-E 2, Stability, Imagen, Midjourney | Best prompt adherence for marketing visuals; Midjourney has no official API |
-| UI | Streamlit | Gradio, React, Flask | Fastest path to a rich multi-panel UI in Python; testable with `AppTest` |
+| UI | React + TypeScript (Vite) behind FastAPI | Streamlit, Gradio, Vue | Full control of layout and interaction (live pipeline, side-by-side editing), proper responsive design, typed client, standard deploy story. Replaced the original Streamlit prototype |
+| Streaming | Server-Sent Events | WebSockets, polling | One-way progress events fit SSE exactly; works through proxies, no extra protocol |
 | Memory | LangGraph checkpointer | Redis, Postgres | Zero extra infra; swap in `SqliteSaver`/`PostgresSaver` for persistence |
 | HTTP | `requests` adapters | vendor SDKs | Uniform retry/error semantics across 9 providers, fewer dependencies |

@@ -12,7 +12,7 @@ filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.coverage.run]
 source = ["src"]
-omit = ["src/web_app/*"]
+omit = []
 
 [tool.ruff]
 line-length = 140

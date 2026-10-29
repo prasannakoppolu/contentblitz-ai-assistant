@@ -19,6 +19,8 @@
 | D6 | **Artefacts tagged with topic** | Prevents stale research/brief reuse when the user switches topics mid-conversation |
 | D7 | **Deterministic quality scoring** (rules + metrics), not LLM-as-judge | Cheap, explainable, testable; LLM judge could be added as an extra dimension |
 | D8 | **Error isolation per node** | A failed image doesn't lose the blog; dependants are skipped explicitly rather than running on missing inputs |
+| D10 | **React SPA + FastAPI with SSE** (replacing Streamlit) | Two codebases (TS + Python) instead of one, but real-time agent progress, side-by-side editing, responsive layout and conventional deployment; the API is also reusable by other clients |
+| D11 | **Keys sent per request, engines cached by hashed config** | Keys travel with each call (HTTPS required in production) but are never stored server-side; LRU cap bounds memory |
 | D9 | **Checkpointer memory** (MemorySaver/SqliteSaver) | Simple, no infra. Multi-instance deployments should switch to `PostgresSaver` |
 
 ## 3. Service integration patterns
@@ -65,7 +67,7 @@ Ambiguous requests with a topic default to a research report; greetings and topi
 
 ## 6. Scalability & performance
 
-- **Stateless engine + external checkpointer:** run multiple Streamlit/API replicas behind a load balancer with
+- **Stateless engine + external checkpointer:** run multiple API replicas behind a load balancer with
   `PostgresSaver` (LangGraph) for shared memory.
 - **Cache:** in-process TTL cache; swap for Redis to share across replicas (same `get/set` interface).
 - **Latency:** research sub-queries are independent and can be parallelised with a thread pool; image generation

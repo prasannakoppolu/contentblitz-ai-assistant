@@ -5,31 +5,31 @@
 ```bash
 python -m venv .venv && source .venv/bin/activate   # Python 3.11+
 pip install -r requirements.txt
+(cd frontend && npm ci && npm run build)             # Node 20+
 cp .env.example .env                                   # optional keys
-streamlit run src/web_app/streamlit_app.py             # http://localhost:8501
+uvicorn src.api.server:app --port 8000                 # http://localhost:8000 (UI + API)
 ```
 
-Offline demo: `CONTENTBLITZ_MOCK=1 streamlit run src/web_app/streamlit_app.py` or `make demo`.
+Offline demo: `make demo`. Frontend hot reload: `make api` + `make web` → http://localhost:5173.
 
 ## 2. Docker
 
 ```bash
-docker compose up --build              # app on :8501, outputs on the contentblitz-data volume
-docker compose --profile test run tests
+docker compose up --build              # UI + API on :8000, outputs on the contentblitz-data volume
 ```
 
-The image runs as a non-root user, exposes a health check on `/_stcore/health`, and defaults to `APP_ENV=production`.
+The multi-stage image builds the React app with Node, then copies `frontend/dist` into a slim Python image that runs
+uvicorn as a non-root user, with a health check on `/api/health`. It defaults to `APP_ENV=production`.
 
-## 3. Streamlit Community Cloud
+## 3. Split hosting (optional)
 
-1. Push the repo to GitHub, then **New app** → main file `src/web_app/streamlit_app.py`.
-2. In **Secrets**, add keys as TOML (`OPENAI_API_KEY = "sk-..."`, etc.) and `APP_ENV = "production"`.
-   Streamlit exposes secrets as environment variables, which `load_settings()` reads.
-3. Images are written to the ephemeral filesystem; export them from the UI.
+The SPA is static: you can host `frontend/dist` on Vercel/Netlify/S3 and run the API elsewhere. Add your UI origin to
+`allow_origins` in `create_app` (CORS) and proxy `/api` to the backend, or serve both from one origin as above
+(simplest; SSE works without CORS).
 
 ## 4. Railway / Render / Fly.io
 
-- Deploy from the Dockerfile; set env vars in the dashboard; expose port 8501.
+- Deploy from the Dockerfile; set env vars in the dashboard; expose port 8000.
 - Mount a volume at `/data` to keep generated images.
 - For persistent conversation memory install `langgraph-checkpoint-sqlite` and use `ContentBlitzEngine(memory="sqlite")`
   with the database on the volume, or use LangGraph's Postgres saver for multi-instance deployments.
@@ -47,11 +47,13 @@ The image runs as a non-root user, exposes a health check on `/_stcore/health`, 
 
 - Structured logs on the `contentblitz` logger (`LOG_LEVEL`). Provider failures and retries are logged at WARNING.
 - Usage/cost per session in the sidebar; `engine.usage()` exposes the same for scraping.
-- Health: Docker `HEALTHCHECK` against Streamlit's health endpoint.
+- Health: `GET /api/health` (used by the Docker `HEALTHCHECK`).
+- Behind nginx, disable response buffering for `/api/threads/*/chat` (the API already sends `X-Accel-Buffering: no`).
 - Optional LangSmith tracing: `pip install langsmith` and set `LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_API_KEY`;
   LangGraph emits traces for every node automatically.
 
 ## 7. CI/CD
 
-`.github/workflows/ci.yml` runs ruff and the full offline test suite (coverage gate 80%) on Python 3.11 and 3.12,
-then builds the Docker image. Add a deploy job (e.g. Railway CLI or `docker push`) gated on the default branch.
+`.github/workflows/ci.yml`: **frontend** (typecheck, Vitest, build), **backend** on Python 3.11 and 3.12 (ruff, full
+offline pytest including Playwright browser e2e against the built UI, 80% coverage gate), then **docker** (build and
+smoke-test the container). Add a deploy job (e.g. Railway CLI or `docker push`) gated on the default branch.

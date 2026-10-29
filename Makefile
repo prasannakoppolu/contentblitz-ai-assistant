@@ -1,20 +1,28 @@
-.PHONY: install dev test cov run demo cli docker lint
+.PHONY: install dev ui api web demo test test-ui cov cli docker lint
 
-install:        ## Install runtime deps
+install:        ## Python + frontend dependencies
 	pip install -r requirements.txt
-dev:            ## Install dev deps
-	pip install -r requirements-dev.txt
-test:           ## Run all tests (offline)
+	cd frontend && npm ci
+dev:            ## Dev/test tooling (incl. Playwright browser)
+	pip install -r requirements-dev.txt && playwright install chromium
+	cd frontend && npm ci
+ui:             ## Build the React app into frontend/dist
+	cd frontend && npm run build
+api:            ## API with auto-reload on :8000 (pair with `make web`)
+	uvicorn src.api.server:app --reload --port 8000
+web:            ## Vite dev server on :5173 with hot reload (proxies /api to :8000)
+	cd frontend && npm run dev
+demo: ui        ## Build the UI and serve everything offline on :8000
+	CONTENTBLITZ_MOCK=1 uvicorn src.api.server:app --port 8000
+test:           ## Python tests (browser e2e runs when frontend/dist exists)
 	pytest
-cov:            ## Tests with coverage report
+test-ui:        ## Frontend unit tests + typecheck
+	cd frontend && npm test && npm run typecheck
+cov:
 	pytest --cov --cov-report=term-missing
-run:            ## Start the Streamlit app
-	streamlit run src/web_app/streamlit_app.py
-demo:           ## Start the app in offline demo mode
-	CONTENTBLITZ_MOCK=1 streamlit run src/web_app/streamlit_app.py
 cli:            ## Interactive terminal chat (offline)
 	python -m src.cli --interactive --mock
-docker:         ## Build and run with Docker
+docker:
 	docker compose up --build
 lint:
 	ruff check src tests

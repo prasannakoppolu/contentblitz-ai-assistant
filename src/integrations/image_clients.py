@@ -48,7 +48,7 @@ class PlaceholderImageProvider(ImageProvider):
     def generate_image(self, prompt: str, size: str = "1024x1024", style: str = "vivid") -> ImageResponse:
         try:
             from PIL import Image, ImageDraw, ImageFont
-        except ImportError as exc:  # pragma: no cover - Pillow ships with streamlit
+        except ImportError as exc:  # pragma: no cover - Pillow is a core requirement
             raise ProviderError(self.name, "Pillow not installed", retryable=False) from exc
 
         w, h = _parse_size(size)

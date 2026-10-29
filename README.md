@@ -3,7 +3,7 @@
 A production-style **multi-agent content marketing system** built on **LangGraph**. Six specialised agents
 research a topic with cited sources, turn it into a structured report, write SEO-optimised blog posts,
 craft LinkedIn posts with a hashtag strategy and generate on-brand visuals. They work through a
-conversational Streamlit interface with memory, quality scoring and multi-provider fallbacks.
+conversational **React** interface (served by a FastAPI backend) with memory, quality scoring and multi-provider fallbacks.
 
 > Capstone project: *Applied Agentic AI for SWEs: AI Content Marketing Assistant*.
 > Runs **fully offline out of the box** (deterministic mock providers), so evaluators can try every feature
@@ -28,7 +28,8 @@ conversational Streamlit interface with memory, quality scoring and multi-provid
 | **Memory** | LangGraph checkpointer per conversation thread (in-memory or SQLite) |
 | **Content series** | "Write a 3-part blog series about X" produces distinct, angle-driven parts |
 | **Export** | Markdown · HTML · Plain text · PDF · WordPress WXR (CMS import) · scheduler JSON (Buffer/Hootsuite) · PNG |
-| **Testing** | 105 offline tests (unit / integration / e2e incl. headless Streamlit), **94% coverage**, CI on Python 3.11 & 3.12 |
+| **Web UI** | React + TypeScript (Vite): chat with a live six-station agent pipeline, content editor with instant re-scoring, research panel with linked citations, exports, settings; responsive, dark mode |
+| **Testing** | 127 Python tests (unit / API / integration / e2e incl. real-browser Playwright), **95% coverage**, plus 16 Vitest component tests; CI on Python 3.11 & 3.12 |
 
 ---
 
@@ -36,8 +37,9 @@ conversational Streamlit interface with memory, quality scoring and multi-provid
 
 ```mermaid
 flowchart LR
-    U([User]) --> UI[Streamlit UI<br/>Chat · Dashboard · Research · Export]
-    UI --> E[ContentBlitzEngine]
+    U([User]) --> UI[React UI<br/>Chat · Content · Research · Export]
+    UI -- REST + SSE --> API[FastAPI<br/>src/api/server.py]
+    API --> E[ContentBlitzEngine]
     E --> G{{LangGraph StateGraph<br/>+ checkpointer memory}}
     G --> QH[Query Handler]
     QH -->|next_step| R[Deep Research]
@@ -77,8 +79,9 @@ contentblitz/
 │   │   ├── image_clients.py (Stability, placeholder)  mock_client.py  service_factory.py
 │   ├── utils/               # content_optimization.py, quality_validation.py, templates.py, export_tools.py
 │   ├── workflow/            # langgraph_workflow.py, state_management.py
-│   ├── web_app/             # streamlit_app.py, components/, static/
+│   ├── api/                 # FastAPI: REST + Server-Sent Events, serves the built UI
 │   └── cli.py
+├── frontend/                # React + TypeScript (Vite): src/components, src/api.ts, tests
 ├── tests/{unit,integration,e2e}/
 ├── config/{services,development,production,test}.yaml
 ├── docs/                    # architecture, API, deployment, technical design, service comparison, demo script
@@ -95,20 +98,24 @@ git clone https://github.com/prasannakoppolu/contentblitz-ai-assistant.git
 cd contentblitz-ai-assistant
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+(cd frontend && npm ci && npm run build)        # Node 20+
 
 # Option A: offline demo (no keys, no cost)
-CONTENTBLITZ_MOCK=1 streamlit run src/web_app/streamlit_app.py
+CONTENTBLITZ_MOCK=1 uvicorn src.api.server:app --port 8000
 
 # Option B: real providers
 cp .env.example .env     # add any keys you have; missing ones are skipped
-streamlit run src/web_app/streamlit_app.py
+uvicorn src.api.server:app --port 8000
 ```
 
-Open http://localhost:8501. API keys can also be pasted into the sidebar (kept for that session only).
+Open http://localhost:8000. API keys can also be pasted into Settings; they stay in that browser tab's memory only.
+
+**Frontend development (hot reload):** run `make api` (FastAPI on :8000) and `make web` (Vite on :5173, proxying
+`/api`), then open http://localhost:5173.
 
 **Docker:** `docker compose up --build` (reads `.env` if present).
 **Terminal:** `python -m src.cli --interactive --mock`.
-**Tests:** `pip install -r requirements-dev.txt && pytest --cov`.
+**Tests:** `make dev`, then `pytest --cov` (Python, incl. browser e2e once the UI is built) and `make test-ui` (Vitest + typecheck).
 
 ### Environment variables
 
@@ -152,7 +159,8 @@ print(state["blog"]["quality"]["score"], state["linkedin"]["hashtags"], state["i
 state = engine.run("make the LinkedIn post more casual", thread_id="acme")   # memory-aware follow-up
 ```
 
-Full agent inputs and outputs are documented in [docs/api_documentation.md](docs/api_documentation.md).
+Full agent inputs/outputs and the HTTP API are documented in [docs/api_documentation.md](docs/api_documentation.md);
+the live OpenAPI docs are at http://localhost:8000/docs.
 
 ---
 
@@ -173,7 +181,7 @@ Full agent inputs and outputs are documented in [docs/api_documentation.md](docs
   long-form writing uses **premium**. Edit tiers in `config/services.yaml`.
 - Research for a topic is **reused across turns**, so a follow-up blog/LinkedIn post doesn't re-search.
 - `max_refinement_loops` caps automatic rewrites (1 in dev, 2 in prod).
-- The sidebar **Usage & cost** panel shows calls, tokens, estimated USD and cache hit rate.
+- The Settings **Usage this session** panel shows calls, tokens, estimated USD and cache hit rate.
 - For development, Gemini Flash's free tier plus Tavily's free tier is the cheapest live configuration.
 
 ## 🛠️ Troubleshooting
@@ -181,7 +189,7 @@ Full agent inputs and outputs are documented in [docs/api_documentation.md](docs
 | Symptom | Fix |
 |---|---|
 | Banner says *offline demo mode* | No keys detected or the toggle is on. Add keys to `.env` or the sidebar and switch the toggle off. |
-| Image shows a gradient card | All image providers failed or no key; check the *Provider attempts* table in Dashboard → Image. |
+| Image shows a gradient card | All image providers failed or no key; check the *Provider attempts* table in Content → Image. |
 | `auth error 401` in the trace | Invalid key: auth errors are not retried, so the next provider is used. Fix the key. |
 | `rate limited (429)` warnings | Handled automatically with backoff; reduce concurrency or add another provider. |
 | Follow-up applied to the wrong piece | Name it explicitly: *"make the **blog** shorter"*. |
@@ -194,7 +202,7 @@ Full agent inputs and outputs are documented in [docs/api_documentation.md](docs
 - [Technical design](docs/technical_design.md): decisions, trade-offs, fallback patterns, quality pipeline, scalability
 - [API documentation](docs/api_documentation.md): every agent's inputs/outputs, engine & provider interfaces
 - [Service comparison](docs/service_comparison.md): providers, cost-benefit, recommendations by budget
-- [Deployment guide](docs/deployment_guide.md): local, Docker, Streamlit Cloud, Railway, monitoring
+- [Deployment guide](docs/deployment_guide.md): local, Docker, Railway/Render/Fly, monitoring
 - [Demo script](docs/demo_script.md): the walkthrough to record for the submission video
 
 ## 🧭 Roadmap (stretch)
