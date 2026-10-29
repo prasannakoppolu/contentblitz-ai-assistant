@@ -1,0 +1,50 @@
+# Provider catalogue and fallback order. Providers without an API key are skipped
+# automatically; mock/placeholder are always appended last so the app never hard-fails.
+fallback_chains:
+  llm: [openai, anthropic, gemini]          # GPT-4o -> Claude Sonnet -> Gemini Flash -> mock
+  research: [serpapi, perplexity, tavily]   # SERP API + LLM -> Perplexity Sonar -> Tavily -> mock
+  image: [dalle3, dalle2, stability]        # DALL-E 3 -> DALL-E 2 -> Stability -> placeholder
+
+# Model tiers: "fast" for routing/meta/hashtags (cheap), "standard"/"premium" for writing.
+models:
+  openai:
+    fast: gpt-4o-mini
+    standard: gpt-4o
+    premium: gpt-4o
+  anthropic:
+    fast: claude-haiku-4-5
+    standard: claude-sonnet-4-5
+    premium: claude-sonnet-4-5
+  gemini:
+    fast: gemini-2.0-flash
+    standard: gemini-2.0-flash
+    premium: gemini-2.0-flash
+  perplexity:
+    standard: sonar-pro
+
+app:
+  use_mock: false
+  cache_ttl_seconds: 1800      # 30-minute research cache
+  max_retries: 3
+  retry_base_delay: 1.0
+  request_timeout: 60
+  quality_threshold: 70        # auto-refine blog posts scoring below this
+  max_refinement_loops: 1
+  output_dir: outputs
+  log_level: INFO
+
+brand_voice:
+  name: ContentBlitz
+  tone: professional, warm and insightful
+  audience: marketers, founders and content creators
+  style_rules:
+    - Use active voice
+    - Prefer concrete examples over abstractions
+    - Address the reader as 'you'
+  banned_phrases:
+    - in today's fast-paced world
+    - game-changer
+    - unlock the power
+    - delve into
+    - in conclusion
+  preferred_terms: {}

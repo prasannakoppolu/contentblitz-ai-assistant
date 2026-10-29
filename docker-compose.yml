@@ -1,0 +1,25 @@
+services:
+  contentblitz:
+    build: .
+    image: contentblitz:latest
+    ports:
+      - "8501:8501"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      CONTENTBLITZ_MOCK: ${CONTENTBLITZ_MOCK:-0}
+    volumes:
+      - contentblitz-data:/data
+    restart: unless-stopped
+
+  tests:
+    build: .
+    profiles: ["test"]
+    environment:
+      APP_ENV: test
+    command: sh -c "pip install -q pytest pytest-cov && pytest --cov"
+
+volumes:
+  contentblitz-data:
