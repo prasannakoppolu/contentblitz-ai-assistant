@@ -112,6 +112,7 @@ def test_placeholder_renders_png():
 
 
 def test_service_factory_builds_chains_from_keys(monkeypatch):
+    monkeypatch.delenv("CONTENTBLITZ_MOCK", raising=False)  # CI forces mock mode globally
     for var, val in {"OPENAI_API_KEY": "sk", "PERPLEXITY_API_KEY": "pk", "STABILITY_API_KEY": ""}.items():
         monkeypatch.setenv(var, val)
     services = build_services(load_settings(env="development"))
