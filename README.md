@@ -124,6 +124,7 @@ To point at an OpenAI-compatible endpoint (Azure OpenAI, vLLM, Ollama), set `mod
 **Docker:** `docker compose up --build` (reads `.env` if present).
 **Terminal:** `python -m src.cli --interactive --mock`.
 **Tests:** `make dev`, then `pytest --cov` (Python, incl. browser e2e once the UI is built) and `make test-ui` (Vitest + typecheck).
+**Benchmarks:** `make bench` (offline) or `make bench-live LABEL=balanced` (your keys); reports go to `docs/benchmarks/`.
 
 ### Environment variables
 
@@ -148,7 +149,7 @@ To point at an OpenAI-compatible endpoint (Azure OpenAI, vLLM, Ollama), set `mod
 
 | You say | Agents that run | Result |
 |---|---|---|
-| *Research the latest trends in sustainable packaging for e-commerce* | QH → Research → Strategist | Trend report with 10 cited sources, stats, angles, keyword ideas |
+| *Research the latest trends in sustainable packaging for e-commerce* | QH → Research → Strategist | Trend report with 10 cited sources (searched in parallel), stats, angles, keyword ideas; each source rated for credibility and each claim fact-checked |
 | *Now write an SEO blog post about it* | QH → Blog (research reused) | ~1,500-word article, meta description, SEO + quality scores |
 | *Make it shorter* | QH → Blog (refine) | Revision 2, re-scored |
 | *Turn it into a LinkedIn post* | QH → LinkedIn | 1,300-1,600 chars, 8-12 hashtags, hook + CTA |
@@ -182,13 +183,13 @@ the live OpenAPI docs are at http://localhost:8000/docs.
    (LangChain `with_retry` for models, the same policy for search/image adapters); auth and bad-request errors fail fast.
 2. **Across providers:** LangChain `with_fallbacks` (models) and `ProviderChain` (search, images) move to the next
    provider; every attempt is recorded and shown in the UI. Invalid structured output also triggers the fallback.
-3. **Within an agent:** research falls back to an extractive summary if every LLM fails; writers fall back to
-   research keywords if keyword generation fails; image prompt enhancement falls back to a template.
-4. **Across agents:** each LangGraph node is wrapped, so a failed agent is reported in the reply while the rest
-   still deliver. Dependants (the strategist after failed research) are skipped cleanly.
-5. **Last resort:** mock LLM/search and the local placeholder renderer keep the app usable during a full outage.
-6. **Inside agents:** subgraph steps degrade on their own (heuristic routing, extractive research summary, default
-   hashtags, template image prompt, placeholder image when a download fails).
+3. **Inside an agent's subgraph:** steps degrade on their own: heuristic routing if every model fails, an extractive
+   research summary, research keywords when keyword generation fails, default hashtags, a template image prompt, and
+   a placeholder image when a generated image can't be downloaded or validated.
+4. **Across agents:** each agent node in the main graph is wrapped, so a failed agent is reported in the reply while
+   the rest still deliver. Dependants (the strategist after failed research) are skipped cleanly.
+5. **Last resort:** the offline mock model, mock search and the local placeholder renderer keep the app usable
+   during a full outage.
 
 ## 💰 Performance & cost tips
 
@@ -213,18 +214,21 @@ the live OpenAPI docs are at http://localhost:8000/docs.
 | `{"detail":"Not Found"}` at http://localhost:8000/ | The UI isn't built. Run `cd frontend && npm ci && npm run build`, then restart the server. |
 | Agent progress arrives all at once behind a proxy | Disable response buffering for `/api/threads/*/chat` (see the deployment guide). |
 | Image shows a gradient card | All image providers failed or no key; check the *Provider attempts* table in Content → Image. |
-| `auth error 401` in the trace | Invalid key: auth errors are not retried, so the next provider is used. Fix the key. |
-| `rate limited (429)` warnings | Handled automatically with backoff; reduce concurrency or add another provider. |
+| `AuthenticationError` / `auth error 401` in the server log or *Provider attempts* | Invalid key: auth errors are not retried, so the next provider is used. Fix the key. |
+| `RateLimitError` / `rate limited (429)` warnings | Retried automatically with backoff on the same provider, then the next provider takes over; reduce concurrency or add another provider. |
+| Research tab flags claims as *Figure not found in source* | The cited source's snippet doesn't contain the number. Open the source and confirm it before publishing; in offline mode most claims are flagged because the demo sources are generic. |
+| Answers come from `mock` although keys are set | Check the server log for the provider error; also make sure `CONTENTBLITZ_MOCK` isn't `1` and *Offline demo mode* is unticked. |
 | Follow-up applied to the wrong piece | Name it explicitly: *"make the **blog** shorter"*. |
 | PDF export unavailable | `pip install reportlab`. |
 | Conversation gone after a server restart | Set `CONTENTBLITZ_MEMORY=sqlite` (already set in Docker). |
 
 ## 📚 Documentation
 
-- [Architecture](docs/architecture.md): components, data flow, state model, sequence diagrams
-- [Technical design](docs/technical_design.md): decisions, trade-offs, fallback patterns, quality pipeline, scalability
-- [API documentation](docs/api_documentation.md): every agent's inputs/outputs, engine & provider interfaces
-- [Service comparison](docs/service_comparison.md): providers, cost-benefit, recommendations by budget
+- [Architecture](docs/architecture.md): components, agent subgraphs, data flow, state model, sequence diagrams
+- [Technical design](docs/technical_design.md): decisions, trade-offs, retry/fallback patterns, fact-checking, quality pipeline, scalability
+- [API documentation](docs/api_documentation.md): HTTP API, engine, every agent's subgraph and inputs/outputs, LLM gateway
+- [Service comparison](docs/service_comparison.md): providers, cost-benefit, benchmark method and results, recommendations by budget
+- [Benchmarks](docs/benchmarks/offline-mock.md): measured offline baseline; add live runs with `make bench-live`
 - [Deployment guide](docs/deployment_guide.md): local, Docker, Railway/Render/Fly, monitoring
 - [Demo script](docs/demo_script.md): the walkthrough to record for the submission video
 

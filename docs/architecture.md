@@ -9,12 +9,13 @@
 | Application | `src/core/workflow.py` (`ContentBlitzEngine`) | Facade: run/stream a turn, read state, persist human edits, usage |
 | Orchestration | `src/workflow/langgraph_workflow.py`, `state_management.py` | LangGraph `StateGraph`, routing function, error isolation, finalisation, memory |
 | Agents | `src/agents/*` | Six single-responsibility agents, **each a LangGraph subgraph**; prompts (`prompts.py`) and output schemas (`schemas.py`) |
-| Domain utilities | `src/utils/*` | SEO analysis, LinkedIn formatting, quality scoring, brand voice, templates, export |
+| Domain utilities | `src/utils/*` | SEO analysis, LinkedIn formatting, quality scoring, brand voice, source credibility & fact-checking, templates, export |
 | Integration | `src/integrations/*` | `LLMGateway` (LangChain chat models + retries + fallbacks), search/image adapters with `ProviderChain` fallbacks, service factory |
 | Cross-cutting | `src/core/config.py`, `resilience.py`, `router.py` | Layered config, retry/backoff, TTL cache, usage tracking, intent routing |
 
-Agents never import a vendor SDK. They receive a `Services` bundle (`llm`, `research`, `image` chains + cache + tracker),
-which keeps every agent unit-testable with mock providers and makes provider switching a config change.
+Agents never import a vendor SDK. They receive a `Services` bundle: `llm` (the LangChain `LLMGateway`), `research`
+and `image` (`ProviderChain`s), plus the cache and usage tracker. That keeps every agent unit-testable offline and
+makes provider switching a config change.
 
 ## 1b. Web request flow
 
@@ -135,18 +136,22 @@ sequenceDiagram
     participant L as LinkedIn
     participant I as Image
     U->>QH: "Create a campaign about urban beekeeping"
-    QH->>QH: LLM route (fast tier) → validate → plan
+    QH->>QH: route: structured RouteDecision (fast tier) → validate → plan
     QH->>R: plan=[research,strategist,blog,linkedin,image]
-    R->>R: 3 sub-queries → search chain (cached) → dedupe ≤10 sources
-    R->>R: LLM analysis → findings/stats with [n] citations → research score
+    R->>R: Send ×3: sub-queries searched in parallel (cached) → merge, dedupe ≤10 sources
+    R->>R: analyze (structured ResearchAnalysis, [n] citations) → verify (credibility + fact-check) → score
     R->>S: research
-    S->>S: template report + Sources; creative brief (keywords, angle, messages)
+    par strategist branches
+        S->>S: report (template + Sources)
+    and
+        S->>S: brief (structured ContentBrief)
+    end
     S->>B: brief
-    B->>B: keywords → template draft (premium) → meta (fast) → SEO audit → score → auto-refine?
+    B->>B: keywords → draft (premium) → meta (fast) → evaluate ⇄ improve while score < threshold
     B->>L: blog title + brief + stats
-    L->>L: hook/body → hashtags (8-12) → length guard → format → score
+    L->>L: draft ‖ hashtags (8-12) → length_check ⇄ adjust → finalize (format + score)
     L->>I: topic, platform
-    I->>I: prompt enhancement → DALL-E 3 → (fallbacks) → download → validate → save PNG + JSON
+    I->>I: enhance prompt → DALL-E 3 → (fallbacks) → store + validate → placeholder if download fails
     I->>U: finalize: summary, scores, suggestions, next-step tip
 ```
 

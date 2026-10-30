@@ -27,7 +27,7 @@ llm_primary?, research_primary?, quality_threshold?}`. Omitted fields fall back 
 ```
 event: start  data: {"thread_id": "...", "providers": {"llm": [...], ...}, "offline": true}
 event: node   data: {"node": "query_handler", "trace": {...}, "plan": ["research","blog"], "topic": "..."}
-event: node   data: {"node": "research", "trace": {"agent":"research","status":"ok","detail":"10 sources via serpapi", ...}}
+event: node   data: {"node": "research", "trace": {"agent":"research","status":"ok","detail":"10 sources via serpapi; 6/9 claims verified", ...}}
 ...
 event: done   data: { full UI-safe state }
 event: error  data: {"message": "..."}        # stream ends after an error
