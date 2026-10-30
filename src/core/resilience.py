@@ -137,6 +137,13 @@ COST_PER_1K_TOKENS = {
 COST_PER_IMAGE = {"dall-e-3": 0.04, "dall-e-2": 0.02, "stability": 0.03}
 
 
+def _price_for(model: str):
+    """Match versioned model ids (e.g. 'gpt-4o-2024-08-06', 'models/gemini-2.0-flash-001') to list prices."""
+    name = (model or "").split("/")[-1]
+    matches = [k for k in COST_PER_1K_TOKENS if name == k or name.startswith(k + "-")]
+    return COST_PER_1K_TOKENS[max(matches, key=len)] if matches else None
+
+
 @dataclass
 class UsageRecord:
     provider: str
@@ -158,8 +165,9 @@ class UsageTracker:
     def record(self, provider: str, model: str, kind: str, input_tokens: int = 0, output_tokens: int = 0,
                latency_s: float = 0.0, ok: bool = True, images: int = 0) -> UsageRecord:
         cost = 0.0
-        if model in COST_PER_1K_TOKENS:
-            cin, cout = COST_PER_1K_TOKENS[model]
+        price = _price_for(model)
+        if price:
+            cin, cout = price
             cost = input_tokens / 1000 * cin + output_tokens / 1000 * cout
         if images:
             cost += images * COST_PER_IMAGE.get(model, 0.0)

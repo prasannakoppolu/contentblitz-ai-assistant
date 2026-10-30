@@ -52,9 +52,30 @@ engine = ContentBlitzEngine(settings: Settings | None = None, services: Services
 
 ## Agents
 
-All agents subclass `BaseAgent(services)` and implement `run(state: dict) -> dict` (a partial state update).
-They also expose `research_for/brief_for/blog_for(state)` helpers that only return artefacts matching the
+Each agent is a **LangGraph subgraph** (`agent.graph`, a `CompiledStateGraph`) mounted as a node of the main
+workflow, and calls models through LangChain chains: `ChatPromptTemplate` (all prompts live in
+`src/agents/prompts.py`) piped into the gateway's chat model, with Pydantic schemas from `src/agents/schemas.py`
+for structured output.
+
+```python
+class BaseAgent:
+    graph: CompiledStateGraph                       # built by build_graph()
+    def run(state: dict) -> dict                    # map workflow state -> subgraph -> partial update
+    def ask(prompt, inputs, *, task, context=None, tier="standard", temperature=0.7,
+            max_tokens=2500, schema=None) -> LLMResult_   # prompt | model (retries + fallbacks)
+```
+
+Agents also expose `research_for/brief_for/blog_for(state)` helpers that only return artefacts matching the
 current topic.
+
+| Agent | Subgraph |
+|---|---|
+| Query Handler | `route` (structured `RouteDecision`, heuristic fallback) → `plan` |
+| Deep Research | `plan` → `Send` fan-out → `search` ×3 **in parallel** → `merge` → `analyze` (`ResearchAnalysis`) → `verify` → `score`; cache hit short-circuits to END |
+| Content Strategist | `report` ‖ `brief` (`ContentBrief`), parallel branches |
+| SEO Blog Writer | write: `keywords` (`KeywordPlan`) → `draft` → `meta` → `evaluate`; refine: `edit` → `evaluate`; `evaluate` ⇄ `improve` loop while score < threshold |
+| LinkedIn Writer | write: `draft` ‖ `hashtags` (`HashtagSet`) → `length_check` ⇄ `adjust` → `finalize`; refine: `edit` → `finalize` |
+| Image Generator | `enhance` → `generate` (provider chain) → `store` → (`placeholder` if download/validation fails) |
 
 ### 1. Query Handler (`QueryHandlerAgent`)
 
@@ -79,13 +100,26 @@ current topic.
  "trends": [], "audience_insights": [], "content_angles": [], "keywords": [],
  "sources": [{"title": "", "url": "", "snippet": "", "published": null}],
  "search_providers": ["serpapi"], "analysis_provider": "openai", "queries": ["..."],
- "quality": {"score": 0, "grade": "A", "dimensions": {"source_coverage": 0, "source_diversity": 0, "depth": 0, "attribution": 0}},
+ "verification": {...}, "quality": {"score": 0, "grade": "A", "dimensions": {"source_coverage": 0, "source_diversity": 0,
+             "depth": 0, "attribution": 0, "source_credibility": 0, "fact_check": 0}},
  "offline_demo": false, "created_at": 0}
 ```
 
-Process: 3 sub-queries (`topic`, `topic statistics <year>`, `topic trends and challenges`) → cached search →
-URL de-duplication (≤10) → LLM JSON analysis with `[n]` citations → research quality score.
+Process: 3 sub-queries (`topic`, `topic statistics <year>`, `topic trends and challenges`) searched **in parallel**
+(cached 30 min) → URL de-duplication (≤10) → structured LLM analysis with `[n]` citations → **fact-check**
+(source credibility + claim verification, `src/utils/source_verification.py`) → research quality score.
 Fallback: extractive summary from snippets if every LLM fails; raises only if *no* search succeeds.
+
+Fact-check output (`research.verification`; each source also carries `credibility`):
+
+```json
+{"claims": [{"claim": "62% of teams ... [1]", "kind": "statistic", "citations": [1],
+             "status": "supported|weak|unverified|uncited|invalid_citation", "note": "..."}],
+ "summary": {"avg_source_credibility": 78, "high_credibility_sources": 4, "low_credibility_sources": 1,
+             "claims_checked": 9, "supported": 6, "needs_review": 3, "verification_rate": 0.67}}
+```
+
+Source credibility: `{"domain": "hbr.org", "score": 88, "tier": "high|medium|low", "reasons": ["recognised research or news publisher"]}`.
 
 ### 3. Content Strategist (`ContentStrategistAgent`)
 
@@ -125,17 +159,37 @@ Templates: `industry_insight`, `personal_story`, `tips`, `announcement`.
 
 Sizes: blog 1792×1024, LinkedIn 1024×1024. Metadata is also written next to the image as `<stem>.json`.
 
-## Provider interfaces (`src/integrations/base.py`)
+## LLM gateway (`src/integrations/llm_gateway.py`)
 
 ```python
-class LLMProvider:    generate(prompt, system="", *, temperature, max_tokens, json_mode, tier, task, context) -> LLMResponse
-class SearchProvider: search(query, num_results=8) -> SearchResponse(query, sources, provider, answer, related_queries)
-class ImageProvider:  generate_image(prompt, size="1024x1024", style="vivid") -> ImageResponse
-ProviderChain(kind, providers, tracker).generate / .search / .generate_image   # failover + .attempts
+gw = services.llm                                   # LLMGateway
+model = gw.runnable(tier="standard", temperature=0.7, max_tokens=2000, schema=None)
+#   -> ChatOpenAI.with_retry(...)  .with_fallbacks([ChatAnthropic..., ChatGoogleGenerativeAI..., MockChatModel])
+#      (with schema: each model's .with_structured_output(schema))
+result = gw.invoke(PROMPT | model, {"topic": "..."}, task="blog", context={...})
+result.output / result.text / result.provider / result.attempts
+gw.names            # e.g. ["openai", "anthropic", "mock"]
 ```
 
-To add a provider: implement the interface (use `HTTPProviderMixin._request` for retry semantics), register it in
-`service_factory.py`, add its key to `API_KEY_ENV`, and list it in `config/services.yaml` → `fallback_chains`.
+* Retries: `with_retry` on transient errors only (rate limit, timeout, connection, 5xx); `max_retries` from config.
+  SDK-internal retries are disabled so this is the single policy. Auth / bad-request errors fail over immediately.
+* Fallbacks: order from `config/services.yaml` → `fallback_chains.llm`; providers without keys are skipped; the
+  offline `MockChatModel` (a real `BaseChatModel`) is always last.
+* `models.<provider>.base_url` points `ChatOpenAI` at any OpenAI-compatible endpoint (Azure OpenAI, vLLM, Ollama…).
+* Every attempt is recorded (provider, model, latency, tokens, cost) via a LangChain callback; LangSmith traces
+  every chain and graph node when `LANGSMITH_TRACING=true`.
+
+## Research and image providers (`src/integrations/base.py`)
+
+```python
+class SearchProvider: search(query, num_results=8) -> SearchResponse(query, sources, provider, answer, related_queries)
+class ImageProvider:  generate_image(prompt, size="1024x1024", style="vivid") -> ImageResponse
+ProviderChain(kind, providers, tracker).search / .generate_image   # failover + per-thread .attempts
+```
+
+To add a search or image provider: implement the interface (use `HTTPProviderMixin._request` for retry
+semantics), register it in `service_factory.py`, add its key to `API_KEY_ENV`, and list it in
+`config/services.yaml` → `fallback_chains`. To add an LLM provider, add a branch in `build_chat_model`.
 
 ## Utilities
 
@@ -148,4 +202,5 @@ To add a provider: implement the interface (use `HTTPProviderMixin._request` for
 | `score_blog / score_linkedin / score_research / score_image` | `quality_validation` | `QualityReport` |
 | `brand_voice_check(text, voice)` / `learn_brand_voice(samples)` | `quality_validation` | Voice consistency / learning |
 | `export_content(md, fmt)` | `export_tools` | `md`, `html`, `txt`, `pdf`, `wxr` |
+| `credibility(source)` / `verify_claims(claims, sources)` / `verify_research(report)` | `source_verification` | Source credibility and citation fact-check |
 | `to_wordpress_wxr(posts)` / `to_social_json(...)` | `export_tools` | CMS / scheduler payloads |

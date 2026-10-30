@@ -8,9 +8,9 @@
 | API | `src/api/server.py`, `schemas.py` | REST + Server-Sent Events over the engine; per-settings engine registry; serves the built SPA |
 | Application | `src/core/workflow.py` (`ContentBlitzEngine`) | Facade: run/stream a turn, read state, persist human edits, usage |
 | Orchestration | `src/workflow/langgraph_workflow.py`, `state_management.py` | LangGraph `StateGraph`, routing function, error isolation, finalisation, memory |
-| Agents | `src/agents/*` | Six single-responsibility agents operating on shared state |
+| Agents | `src/agents/*` | Six single-responsibility agents, **each a LangGraph subgraph**; prompts (`prompts.py`) and output schemas (`schemas.py`) |
 | Domain utilities | `src/utils/*` | SEO analysis, LinkedIn formatting, quality scoring, brand voice, templates, export |
-| Integration | `src/integrations/*` | Provider adapters, `ProviderChain` fallbacks, service factory |
+| Integration | `src/integrations/*` | `LLMGateway` (LangChain chat models + retries + fallbacks), search/image adapters with `ProviderChain` fallbacks, service factory |
 | Cross-cutting | `src/core/config.py`, `resilience.py`, `router.py` | Layered config, retry/backoff, TTL cache, usage tracking, intent routing |
 
 Agents never import a vendor SDK. They receive a `Services` bundle (`llm`, `research`, `image` chains + cache + tracker),
@@ -77,6 +77,37 @@ def next_step(state):
 The canonical order `research → strategist → blog → linkedin → image` guarantees each agent sees its upstream
 context (research → brief → blog title used by LinkedIn & image).
 
+## 2b. Agent subgraphs
+
+Every agent node in the graph above is itself a compiled LangGraph `StateGraph` with private state.
+
+```mermaid
+flowchart LR
+    subgraph Research
+      rp[plan] -->|Send ×3| rs[search ×3 in parallel] --> rm[merge] --> ra[analyze<br/>structured output] --> rv[verify<br/>fact-check] --> rsc[score]
+      rp -.cache hit.-> rend((END))
+    end
+    subgraph Blog
+      bk[keywords] --> bd[draft] --> bm[meta] --> be{evaluate}
+      bed[edit<br/>user feedback] --> be
+      be -- score < threshold --> bi[improve] --> be
+    end
+    subgraph LinkedIn
+      ld[draft] --> lc{length_check}
+      lh[hashtags] --> lc
+      lc -- out of range --> la[adjust] --> lc
+      lc -- ok --> lf[finalize]
+    end
+    subgraph Image
+      ie[enhance] --> ig[generate] --> ist{store}
+      ist -- download failed --> ip[placeholder]
+    end
+```
+
+The Query Handler runs `route` (LangChain structured output → `RouteDecision`, heuristic fallback) → `plan`; the
+Strategist runs `report` and `brief` as parallel branches. LLM steps are `ChatPromptTemplate | chat model` chains from
+the `LLMGateway`.
+
 ## 3. State model (`ContentState`)
 
 | Field | Lifetime | Notes |
@@ -134,8 +165,10 @@ flowchart LR
     end
 ```
 
-Providers without keys are not instantiated. Each provider call retries transient errors with exponential backoff
-before the chain moves on. Every attempt is logged in `chain.attempts` and the `UsageTracker`.
+LLM chains are LangChain `ChatOpenAI` / `ChatAnthropic` / `ChatGoogleGenerativeAI` models composed with
+`.with_retry()` (transient errors only) and `.with_fallbacks()`; the offline mock is a LangChain `BaseChatModel`.
+Search and image chains are `ProviderChain`s over HTTP adapters. Providers without keys are not instantiated, and
+every attempt is recorded in the `UsageTracker` (and in LangSmith when tracing is on).
 
 ## 6. Technology choices & alternatives
 
@@ -148,4 +181,5 @@ before the chain moves on. Every attempt is logged in `chain.attempts` and the `
 | UI | React + TypeScript (Vite) behind FastAPI | Streamlit, Gradio, Vue | Full control of layout and interaction (live pipeline, side-by-side editing), proper responsive design, typed client, standard deploy story. Replaced the original Streamlit prototype |
 | Streaming | Server-Sent Events | WebSockets, polling | One-way progress events fit SSE exactly; works through proxies, no extra protocol |
 | Memory | LangGraph checkpointer | Redis, Postgres | Zero extra infra; swap in `SqliteSaver`/`PostgresSaver` for persistence |
-| HTTP | `requests` adapters | vendor SDKs | Uniform retry/error semantics across 9 providers, fewer dependencies |
+| LLM integration | LangChain chat models (`ChatOpenAI`, `ChatAnthropic`, `ChatGoogleGenerativeAI`) | Raw HTTP, vendor SDKs | Structured output, `with_retry`/`with_fallbacks`, prompt templates and LangSmith tracing; one interface across providers |
+| Search / image HTTP | `requests` adapters | LangChain community tools | Uneven LangChain coverage for SERP API/Perplexity/Stability; adapters share one retry policy |

@@ -51,8 +51,10 @@ The SPA is static: you can host `frontend/dist` on Vercel/Netlify/S3 and run the
 - Usage and estimated cost per provider configuration since start-up: Settings panel, or `POST /api/usage`.
 - Health: `GET /api/health` (used by the Docker `HEALTHCHECK`).
 - Behind nginx, disable response buffering for `/api/threads/*/chat` (the API already sends `X-Accel-Buffering: no`).
-- Optional LangSmith tracing: `pip install langsmith` and set `LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_API_KEY`;
-  LangGraph emits traces for every node automatically.
+- LangSmith tracing (optional): set `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` (project defaults to
+  `contentblitz`). Every agent subgraph node, prompt and model call (with retries and fallbacks) appears as a trace;
+  Settings shows whether tracing is on.
+- Performance: `make bench` / `make bench-live` write latency, cost and quality reports to `docs/benchmarks/`.
 
 ## 7. CI/CD
 

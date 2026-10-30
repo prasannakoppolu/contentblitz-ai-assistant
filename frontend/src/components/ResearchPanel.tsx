@@ -1,4 +1,4 @@
-import type { ConversationState } from "../types";
+import type { ClaimCheck, ClaimStatus, ConversationState } from "../types";
 import { Markdown } from "./Markdown";
 import { QualityPanel, Stat } from "./Quality";
 
@@ -31,8 +31,27 @@ function Cited({ text }: { text: string }) {
   );
 }
 
+const STATUS_LABEL: Record<ClaimStatus, string> = {
+  supported: "Supported by source",
+  weak: "Loosely supported",
+  unverified: "Figure not found in source",
+  uncited: "No citation",
+  invalid_citation: "Broken citation",
+};
+
+function ClaimBadge({ check }: { check?: ClaimCheck }) {
+  if (!check) return null;
+  return (
+    <span className={`claim claim--${check.status}`} title={check.note}>
+      {STATUS_LABEL[check.status]}
+    </span>
+  );
+}
+
 export function ResearchPanel({ state }: { state: ConversationState }) {
   const r = state.research;
+  const v = r?.verification?.summary;
+  const checks = new Map((r?.verification?.claims ?? []).map((c) => [c.claim, c]));
   if (!r) {
     return (
       <div className="empty">
@@ -56,7 +75,15 @@ export function ResearchPanel({ state }: { state: ConversationState }) {
         <Stat value={r.sources.length} label="sources" />
         <Stat value={r.key_findings.length} label="findings" />
         <Stat value={r.statistics.length} label="statistics" />
+        {v && <Stat value={`${v.supported}/${v.claims_checked}`} label="claims verified" hint="Claims whose cited source covers them" />}
+        {v && <Stat value={v.avg_source_credibility} label="avg source credibility" hint="0-100, by publisher type and recency" />}
       </div>
+      {v && v.needs_review > 0 && (
+        <p className="notice">
+          {v.needs_review} claim{v.needs_review > 1 ? "s aren't" : " isn't"} confirmed by the cited source's snippet. Check
+          the flagged items against the full source before publishing.
+        </p>
+      )}
       <QualityPanel quality={r.quality} title="Research quality" />
       <div className="research__cols">
         <div className="research__main">
@@ -70,7 +97,7 @@ export function ResearchPanel({ state }: { state: ConversationState }) {
                 <ul>
                   {items.map((x) => (
                     <li key={x}>
-                      <Cited text={x} />
+                      <Cited text={x} /> <ClaimBadge check={checks.get(x)} />
                     </li>
                   ))}
                 </ul>
@@ -98,6 +125,11 @@ export function ResearchPanel({ state }: { state: ConversationState }) {
                 <a href={s.url} target="_blank" rel="noreferrer">
                   {s.title}
                 </a>
+                {s.credibility && (
+                  <span className={`cred cred--${s.credibility.tier}`} title={s.credibility.reasons.join("; ")}>
+                    {s.credibility.tier} credibility · {s.credibility.score}
+                  </span>
+                )}
                 {s.snippet && <p className="muted">{s.snippet.slice(0, 220)}</p>}
               </li>
             ))}

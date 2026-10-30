@@ -172,6 +172,26 @@ describe("ResearchPanel", () => {
     expect(screen.getByRole("link", { name: "1" })).toHaveAttribute("href", "#src-1");
     expect(screen.getByRole("link", { name: "Bee source" })).toHaveAttribute("href", "https://bees.example");
   });
+
+  it("shows fact-check status per claim and credibility per source", () => {
+    const claim = "Hives grow 40% yearly [1].";
+    const research = {
+      topic: "bees", summary: "S", key_findings: [], statistics: [claim], trends: [], audience_insights: [],
+      content_angles: [], keywords: [], search_providers: ["serpapi"], analysis_provider: "openai", quality,
+      sources: [{ title: "Bee blog", url: "http://bees.blogspot.com",
+                  credibility: { domain: "bees.blogspot.com", score: 33, tier: "low" as const, reasons: ["self-published"] } }],
+      verification: {
+        claims: [{ claim, kind: "statistic" as const, citations: [1], status: "unverified" as const, note: "Figure missing" }],
+        summary: { avg_source_credibility: 33, high_credibility_sources: 0, low_credibility_sources: 1,
+                   claims_checked: 1, supported: 0, needs_review: 1 },
+      },
+    };
+    render(<ResearchPanel state={baseState({ research })} />);
+    expect(screen.getByText("Figure not found in source")).toHaveAttribute("title", "Figure missing");
+    expect(screen.getByText(/low credibility · 33/)).toBeInTheDocument();
+    expect(screen.getByText("0/1")).toBeInTheDocument();
+    expect(screen.getByText(/isn't confirmed by the cited source/)).toBeInTheDocument();
+  });
 });
 
 describe("ExportPanel", () => {

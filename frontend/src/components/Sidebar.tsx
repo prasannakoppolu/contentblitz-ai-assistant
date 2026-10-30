@@ -123,6 +123,7 @@ export function Sidebar(p: Props) {
             <div><dt>Estimated cost</dt><dd>${usage.total_cost_usd.toFixed(3)}</dd></div>
             <div><dt>Cache hits</dt><dd>{usage.cache.hits} of {usage.cache.hits + usage.cache.misses}</dd></div>
             <div><dt>Writing chain</dt><dd>{usage.providers.llm?.join(" → ")}</dd></div>
+            <div><dt>LangSmith tracing</dt><dd>{p.config.tracing ? "On" : "Off"}</dd></div>
           </dl>
         ) : (
           <p className="muted small">Usage appears after the first request.</p>

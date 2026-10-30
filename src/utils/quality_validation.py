@@ -201,8 +201,19 @@ def score_research(report: Dict[str, Any]) -> QualityReport:
         "depth": min(100, 15 * len(findings) + 10 * len(stats)),
         "attribution": int(100 * cited / max(1, len(findings) + len(stats))),
     }
+    verification = (report.get("verification") or {}).get("summary")
+    if verification:
+        dims["source_credibility"] = int(verification["avg_source_credibility"])
+        dims["fact_check"] = int(round(100 * verification["verification_rate"]))
     total = int(round(sum(dims.values()) / len(dims)))
     suggestions = []
+    if verification:
+        if verification["needs_review"]:
+            suggestions.append(f"{verification['needs_review']} claim(s) aren't confirmed by their cited source; "
+                               "check them before publishing.")
+        if verification["low_credibility_sources"]:
+            suggestions.append(f"Replace {verification['low_credibility_sources']} low-credibility source(s) "
+                               "with research publishers or primary data.")
     if len(sources) < 5:
         suggestions.append("Gather at least 5 sources for well-rounded research.")
     if dims["attribution"] < 70:

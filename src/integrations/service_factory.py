@@ -1,7 +1,10 @@
-"""Builds provider fallback chains from :class:`Settings`.
+"""Builds the service bundle from :class:`Settings`.
 
-Providers without an API key are skipped; the mock / placeholder providers
-are always appended last so the system degrades gracefully instead of failing.
+* LLMs: an :class:`LLMGateway` of LangChain chat models with retries and fallbacks.
+* Research and images: :class:`ProviderChain` fallbacks over HTTP adapters.
+
+Providers without an API key are skipped; mock / placeholder providers are always
+last so the system degrades gracefully instead of failing.
 """
 from __future__ import annotations
 
@@ -10,11 +13,11 @@ from typing import List, Optional
 
 from src.core.config import Settings
 from src.core.resilience import TTLCache, UsageTracker
-from src.integrations.base import ImageProvider, LLMProvider, ProviderChain, SearchProvider
+from src.integrations.base import ImageProvider, ProviderChain, SearchProvider
 from src.integrations.image_clients import PlaceholderImageProvider, StabilityProvider
-from src.integrations.llm_clients import AnthropicProvider, GeminiProvider
-from src.integrations.mock_client import MockLLMProvider, MockSearchProvider
-from src.integrations.openai_client import DallEProvider, OpenAIChatProvider
+from src.integrations.llm_gateway import LLMGateway
+from src.integrations.mock_client import MockSearchProvider
+from src.integrations.openai_client import DallEProvider
 from src.integrations.perplexity_client import PerplexityProvider, TavilyProvider
 from src.integrations.serp_client import SerpAPIProvider
 
@@ -23,7 +26,7 @@ from src.integrations.serp_client import SerpAPIProvider
 class Services:
     """Bundle of everything agents need to talk to the outside world."""
 
-    llm: ProviderChain
+    llm: LLMGateway
     research: ProviderChain
     image: ProviderChain
     settings: Settings
@@ -38,22 +41,6 @@ class Services:
 def _common(settings: Settings) -> dict:
     return {"timeout": settings.request_timeout, "max_retries": settings.max_retries,
             "retry_base_delay": settings.retry_base_delay}
-
-
-def build_llm_providers(settings: Settings) -> List[LLMProvider]:
-    if settings.use_mock:
-        return [MockLLMProvider()]
-    providers: List[LLMProvider] = []
-    for name in settings.llm_order:
-        key = settings.api_keys.get(name)
-        if name == "openai" and key:
-            providers.append(OpenAIChatProvider(key, settings.models.get("openai"), **_common(settings)))
-        elif name == "anthropic" and key:
-            providers.append(AnthropicProvider(key, settings.models.get("anthropic"), **_common(settings)))
-        elif name == "gemini" and key:
-            providers.append(GeminiProvider(key, settings.models.get("gemini"), **_common(settings)))
-    providers.append(MockLLMProvider())
-    return providers
 
 
 def build_search_providers(settings: Settings) -> List[SearchProvider]:
@@ -91,7 +78,7 @@ def build_services(settings: Settings, tracker: Optional[UsageTracker] = None,
                    cache: Optional[TTLCache] = None) -> Services:
     tracker = tracker or UsageTracker()
     return Services(
-        llm=ProviderChain("llm", build_llm_providers(settings), tracker),
+        llm=LLMGateway(settings, tracker),
         research=ProviderChain("research", build_search_providers(settings), tracker),
         image=ProviderChain("image", build_image_providers(settings), tracker),
         settings=settings,

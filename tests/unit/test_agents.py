@@ -43,8 +43,10 @@ def test_research_agent_sources_citations_and_cache(services):
     assert "cache hit" in again["trace"][-1]["detail"]
 
 
-def test_research_agent_degrades_to_extractive(services, failing_provider):
-    services.llm.providers = [failing_provider("openai")]
+def test_research_agent_degrades_to_extractive(services, failing_llm):
+    services.llm.extra_models = [("openai", failing_llm())]
+    services.llm.include_mock = False
+    services.llm.reset()
     out = DeepResearchAgent(services).run({"topic": "edge computing", "trace": []})
     assert out["research"]["analysis_provider"].startswith("extractive")
     assert out["research"]["key_findings"]
@@ -142,3 +144,87 @@ def test_image_agent_fallback_chain(services, failing_provider):
     assert [a["provider"] for a in img["attempts"]] == ["dalle3", "placeholder"]
     assert "after fallback" in out["trace"][-1]["detail"]
     assert (img["width"], img["height"]) == (1024, 1024)
+
+
+# --------------------------------------------------------------------------- #
+# LangGraph subgraph structure
+# --------------------------------------------------------------------------- #
+
+def _nodes(agent):
+    return set(agent.graph.get_graph().nodes) - {"__start__", "__end__"}
+
+
+def test_every_agent_is_a_langgraph_subgraph(services):
+    from langgraph.graph.state import CompiledStateGraph
+
+    agents = [QueryHandlerAgent, DeepResearchAgent, ContentStrategistAgent, SEOBlogWriterAgent, LinkedInWriterAgent,
+              ImageGenerationAgent]
+    for cls in agents:
+        assert isinstance(cls(services).graph, CompiledStateGraph), cls.__name__
+    assert _nodes(DeepResearchAgent(services)) == {"plan", "search", "merge", "analyze", "verify", "score"}
+    assert _nodes(SEOBlogWriterAgent(services)) == {"keywords", "draft", "meta", "edit", "evaluate", "improve"}
+    assert _nodes(LinkedInWriterAgent(services)) == {"draft", "hashtags", "length_check", "adjust", "edit", "finalize"}
+
+
+def test_research_searches_run_in_parallel(services):
+    import threading
+    import time as _time
+
+    from src.integrations.mock_client import MockSearchProvider
+
+    seen, lock = set(), threading.Lock()
+
+    class SlowSearch(MockSearchProvider):
+        def search(self, query, num_results=8):
+            with lock:
+                seen.add(threading.get_ident())
+            _time.sleep(0.2)
+            return super().search(query, num_results)
+
+    services.research.providers[:] = [SlowSearch()]
+    started = _time.perf_counter()
+    out = DeepResearchAgent(services).run({"topic": "parallel research", "trace": []})
+    assert _time.perf_counter() - started < 0.55   # 3 searches × 0.2s would take ≥0.6s sequentially
+    assert len(seen) == 3 and out["research"]["verification"]["summary"]["claims_checked"] > 0
+
+
+def test_research_sources_carry_credibility(services):
+    r = DeepResearchAgent(services).run({"topic": "creator economy", "trace": []})["research"]
+    assert all({"score", "tier"} <= set(s["credibility"]) for s in r["sources"])
+    assert {"source_credibility", "fact_check"} <= set(r["quality"]["dimensions"])
+    assert "claims verified" in DeepResearchAgent(services).run({"topic": "new topic", "trace": []})["trace"][-1]["detail"]
+
+
+def test_blog_improve_loop_stops_at_max_and_keeps_best(services, research_state):
+    services.settings.quality_threshold = 101
+    services.settings.max_refinement_loops = 2
+    agent = SEOBlogWriterAgent(services)
+    out = agent.invoke_graph(agent._inputs(dict(research_state)))
+    assert out["loops"] == 2
+    assert out["best"]["quality"]["score"] >= out["candidate"]["quality"]["score"]
+
+
+def test_linkedin_length_guard_expands_short_posts(services, research_state, monkeypatch):
+    from src.integrations import mock_client
+
+    original = mock_client.MockLLMProvider._task_linkedin
+    monkeypatch.setattr(mock_client.MockLLMProvider, "_task_linkedin", lambda self, p, c: "Short hook? 👇\n\nOne line.")
+    agent = LinkedInWriterAgent(services)
+    out = agent.invoke_graph(agent._inputs(dict(research_state)))
+    assert out["fixes"] == 1 and "One more thing" in out["post"]["body"]
+    monkeypatch.setattr(mock_client.MockLLMProvider, "_task_linkedin", original)
+
+
+def test_image_falls_back_to_placeholder_when_download_fails(services):
+    from src.integrations.base import ImageResponse
+
+    class UrlOnly:
+        name = "dalle3"
+
+        def generate_image(self, prompt, size="1024x1024", style="vivid"):
+            return ImageResponse("dalle3", "dall-e-3", url="http://127.0.0.1:9/unreachable.png", size=size)
+
+    services.image.providers.insert(0, UrlOnly())
+    img = ImageGenerationAgent(services).run({"topic": "rooftop gardens", "user_query": "image", "trace": []})["image"]
+    assert img["provider"] == "placeholder" and Path(img["path"]).exists()
+    assert {"provider": "dalle3", "ok": False, "error": "image download or validation failed"} in img["attempts"]

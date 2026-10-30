@@ -18,6 +18,7 @@ RUN pip install -r requirements.txt
 
 COPY src/ src/
 COPY config/ config/
+COPY scripts/ scripts/
 COPY --from=ui /ui/dist frontend/dist
 RUN useradd -m appuser && mkdir -p /data/outputs && chown -R appuser /data /app
 USER appuser
