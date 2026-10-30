@@ -48,7 +48,7 @@ jobs:
           path: frontend/dist
       - run: pip install -r requirements-dev.txt
       - run: playwright install --with-deps chromium
-      - run: ruff check src tests
+      - run: ruff check src tests scripts
       - run: pytest --cov --cov-report=term-missing --cov-fail-under=80
 
   docker:

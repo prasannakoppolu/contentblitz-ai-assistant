@@ -62,16 +62,42 @@ Run the same 5 prompts (research-only, blog, LinkedIn, image, campaign) per conf
 | SEO compliance | `blog.seo.issues` count, keyword density, meta length |
 | Reliability | `engine.usage()["failures"]`, `image.attempts` |
 
-Benchmark results table (fill in from your own runs; the project ships without live-provider numbers because
-the build and CI run fully offline):
+### Running the benchmark
 
-| Configuration | Avg latency / campaign | Cost / campaign | Blog quality | LinkedIn quality | Failures |
-|---|---|---|---|---|---|
-| Balanced (default) | _tbd_ | _tbd_ | _tbd_ | _tbd_ | _tbd_ |
-| Lean (4o-mini + SERP + DALL-E 2) | _tbd_ | _tbd_ | _tbd_ | _tbd_ | _tbd_ |
-| Claude-first | _tbd_ | _tbd_ | _tbd_ | _tbd_ | _tbd_ |
-| Free (Gemini + Tavily) | _tbd_ | _tbd_ | _tbd_ | _tbd_ | _tbd_ |
-| Offline mock (measured) | < 1 s | $0 | 85-95 | 95-100 | 0 |
+`scripts/benchmark.py` runs the five scenarios end to end through the real workflow (cold cache, several runs) and
+writes `docs/benchmarks/<label>.md` and `.json`:
+
+```bash
+make bench                                                      # offline baseline (no keys)
+make bench-live LABEL=balanced                                  # your .env keys, default chains
+make bench-live LABEL=claude-first ARGS="--llm anthropic"
+make bench-live LABEL=lean ARGS="--llm openai --image dalle2"
+make bench-live LABEL=free ARGS="--llm gemini --research tavily"
+```
+
+### Measured: offline baseline
+
+Measured with mock providers, so this isolates ContentBlitz's own overhead (orchestration, scoring, fact-checking,
+export-ready packaging) from provider latency. Full report: [benchmarks/offline-mock.md](benchmarks/offline-mock.md).
+
+| Scenario | p50 latency (s) | max (s) | LLM calls | Tokens | Cost (USD) | Avg quality | Failed attempts | Agent errors |
+|---|---|---|---|---|---|---|---|---|
+| research | 0.02 | 1.49 | 4 | 3239 | $0.0000 | 83 | 0 | 0 |
+| blog | 0.04 | 0.04 | 5 | 4320 | $0.0000 | 87.5 | 0 | 0 |
+| linkedin | 0.04 | 0.04 | 5 | 2590 | $0.0000 | 89.5 | 0 | 0 |
+| image | 0.02 | 0.05 | 2 | 556 | $0.0000 | 80 | 0 | 0 |
+| campaign | 0.06 | 0.06 | 10 | 6891 | $0.0000 | 88.2 | 0 | 0 |
+
+### Live configurations
+
+Fill in from `make bench-live` runs (live numbers need API keys, which the build environment doesn't have):
+
+| Configuration | Campaign p50 latency | Cost / campaign | Avg quality | Failed attempts |
+|---|---|---|---|---|
+| Balanced (default) | _run `make bench-live LABEL=balanced`_ | | | |
+| Lean (4o-mini + SERP + DALL-E 2) | | | | |
+| Claude-first | | | | |
+| Free (Gemini + Tavily) | | | | |
 
 Expected characteristics based on provider documentation and common practice (verify with the table above):
 
@@ -92,4 +118,5 @@ Expected characteristics based on provider documentation and common practice (ve
 | Data control | Vendor terms | Full control / self-host |
 | Ops effort | None | GPU hosting, upgrades |
 
-Adding an OpenAI-compatible open-source endpoint is a ~20-line `LLMProvider` (reuse `OpenAIChatProvider` with a custom `base_url`).
+An OpenAI-compatible open-source endpoint (vLLM, Ollama, Together, Azure OpenAI) needs no code: set
+`models.openai.base_url` (and the model names) in `config/services.yaml` and `ChatOpenAI` talks to it.

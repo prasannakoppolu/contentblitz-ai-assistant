@@ -1,4 +1,5 @@
-"""Provider adapters against a fake HTTP session (no network)."""
+"""Research and image provider adapters against a fake HTTP session (no network).
+LLM providers are LangChain chat models; see tests/unit/test_llm_gateway.py."""
 from __future__ import annotations
 
 import base64
@@ -8,8 +9,7 @@ import pytest
 from src.core.config import load_settings
 from src.core.resilience import ProviderError
 from src.integrations.image_clients import PlaceholderImageProvider, StabilityProvider
-from src.integrations.llm_clients import AnthropicProvider, GeminiProvider
-from src.integrations.openai_client import DallEProvider, OpenAIChatProvider
+from src.integrations.openai_client import DallEProvider
 from src.integrations.perplexity_client import PerplexityProvider, TavilyProvider
 from src.integrations.serp_client import SerpAPIProvider
 from src.integrations.service_factory import build_services
@@ -40,38 +40,6 @@ def _with(provider, *responses):
     provider.session = FakeSession(*responses)
     provider.retry_base_delay = 0
     return provider
-
-
-def test_openai_chat_json_mode_and_usage():
-    p = _with(OpenAIChatProvider("k"), FakeResponse(200, {"choices": [{"message": {"content": "{\"a\":1}"}}],
-                                                         "usage": {"prompt_tokens": 10, "completion_tokens": 5}}))
-    r = p.generate("hi", "sys", json_mode=True, tier="fast")
-    assert r.text == '{"a":1}' and r.model == "gpt-4o-mini" and r.input_tokens == 10
-    body = p.session.calls[0][2]["json"]
-    assert body["response_format"] == {"type": "json_object"} and body["messages"][0]["role"] == "system"
-
-
-def test_openai_retries_on_429_then_succeeds():
-    p = _with(OpenAIChatProvider("k", max_retries=2), FakeResponse(429), FakeResponse(200, {"choices": [{"message": {"content": "ok"}}]}))
-    assert p.generate("hi").text == "ok"
-    assert len(p.session.calls) == 2
-
-
-def test_openai_auth_error_not_retried():
-    p = _with(OpenAIChatProvider("bad", max_retries=3), FakeResponse(401))
-    with pytest.raises(ProviderError):
-        p.generate("hi")
-    assert len(p.session.calls) == 1
-
-
-def test_anthropic_and_gemini_parsing():
-    a = _with(AnthropicProvider("k"), FakeResponse(200, {"content": [{"type": "text", "text": "claude says"}],
-                                                        "usage": {"input_tokens": 3, "output_tokens": 2}}))
-    assert a.generate("hi", json_mode=True).text == "claude says"
-    assert "JSON" in a.session.calls[0][2]["json"]["system"]
-    g = _with(GeminiProvider("k"), FakeResponse(200, {"candidates": [{"content": {"parts": [{"text": "gemini"}]}}]}))
-    assert g.generate("hi", "sys").text == "gemini"
-    assert g.session.calls[0][2]["json"]["systemInstruction"]["parts"][0]["text"] == "sys"
 
 
 def test_serpapi_parsing_and_empty_results():

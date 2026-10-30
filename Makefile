@@ -1,4 +1,4 @@
-.PHONY: install dev ui api web demo test test-ui cov cli docker lint
+.PHONY: install dev ui api web demo test test-ui cov cli docker lint bench bench-live
 
 install:        ## Python + frontend dependencies
 	pip install -r requirements.txt
@@ -22,7 +22,11 @@ cov:
 	pytest --cov --cov-report=term-missing
 cli:            ## Interactive terminal chat (offline)
 	python -m src.cli --interactive --mock
+bench:          ## Offline benchmark -> docs/benchmarks/offline-mock.md
+	python -m scripts.benchmark --mock
+bench-live:     ## Benchmark with your keys: make bench-live LABEL=balanced ARGS="--llm openai"
+	python -m scripts.benchmark --label $(or $(LABEL),live) $(ARGS)
 docker:
 	docker compose up --build
 lint:
-	ruff check src tests
+	ruff check src tests scripts

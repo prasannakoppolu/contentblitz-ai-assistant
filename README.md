@@ -1,6 +1,6 @@
 # ⚡ ContentBlitz: AI Content Marketing Assistant
 
-A production-style **multi-agent content marketing system** built on **LangGraph**. Six specialised agents
+A production-style **multi-agent content marketing system** built with **LangGraph** and **LangChain**. Six specialised agents
 research a topic with cited sources, turn it into a structured report, write SEO-optimised blog posts,
 craft LinkedIn posts with a hashtag strategy and generate on-brand visuals. They work through a
 conversational **React** interface (served by a FastAPI backend) with memory, quality scoring and multi-provider fallbacks.
@@ -16,9 +16,12 @@ conversational **React** interface (served by a FastAPI backend) with memory, qu
 | Capability | What you get |
 |---|---|
 | **6 specialised agents** | Query Handler · Deep Research · Content Strategist · SEO Blog Writer · LinkedIn Writer · Image Generator |
+| **LangGraph + LangChain** | Each agent is its own **LangGraph subgraph** (parallel research fan-out, a blog self-correction loop, a LinkedIn length-guard loop) mounted in a supervising graph; model calls are LangChain `ChatPromptTemplate` → `ChatOpenAI` / `ChatAnthropic` / `ChatGoogleGenerativeAI` chains with Pydantic structured output |
 | **Intelligent routing** | LLM router (cheap tier) with schema validation, plus a deterministic heuristic fallback; resolves follow-ups ("make it shorter", "turn *it* into a LinkedIn post") |
 | **Research-first workflows** | Written content is automatically grounded in fresh research; research is reused across turns for the same topic |
-| **Multi-provider fallbacks** | LLM: OpenAI → Claude → Gemini → mock · Research: SERP API → Perplexity → Tavily → mock · Images: DALL-E 3 → DALL-E 2 → Stability → local placeholder |
+| **Multi-provider fallbacks** | LLM (LangChain `with_retry` + `with_fallbacks`): OpenAI → Claude → Gemini → mock · Research: SERP API → Perplexity → Tavily → mock · Images: DALL-E 3 → DALL-E 2 → Stability → local placeholder |
+| **Source credibility & fact-checking** | Every source gets a credibility rating; every finding and statistic is checked against the source it cites, and unconfirmed claims are flagged in the Research tab |
+| **Observability & benchmarks** | LangSmith tracing of every agent node and model call (`LANGSMITH_TRACING=true`); `make bench` measures latency, cost and quality per provider configuration |
 | **Resilience** | Exponential backoff with jitter, non-retryable auth errors, per-agent error isolation, graceful degradation |
 | **Cost control** | 30-min TTL research cache, model tiers (mini for routing/meta/hashtags), usage & cost tracker in the UI |
 | **SEO engine** | Keyword strategy, 1-2% density check, 150-160 char meta descriptions, H1/H2/H3 audit, internal-link suggestions, Flesch scores |
@@ -29,7 +32,7 @@ conversational **React** interface (served by a FastAPI backend) with memory, qu
 | **Content series** | "Write a 3-part blog series about X" produces distinct, angle-driven parts |
 | **Export** | Markdown · HTML · Plain text · PDF · WordPress WXR (CMS import) · scheduler JSON (Buffer/Hootsuite) · PNG |
 | **Web UI** | React + TypeScript (Vite): chat with a live six-station agent pipeline, content editor with instant re-scoring, research panel with linked citations, exports, settings; responsive, dark mode |
-| **Testing** | 129 Python tests (unit / API / integration / e2e incl. real-browser Playwright), **95% coverage**, plus 16 Vitest component tests; CI on Python 3.11 & 3.12 |
+| **Testing** | 155 Python tests (unit / API / integration / e2e incl. real-browser Playwright and the real `ChatOpenAI` client against a local OpenAI-compatible server), **96% coverage**, plus 17 Vitest component tests; CI on Python 3.11 & 3.12 |
 
 ---
 
@@ -41,7 +44,7 @@ flowchart LR
     UI -- REST + SSE --> API[FastAPI<br/>src/api/server.py]
     API --> E[ContentBlitzEngine]
     E --> G{{LangGraph StateGraph<br/>+ checkpointer memory}}
-    G --> QH[Query Handler]
+    G --> QH[Query Handler<br/>each agent = LangGraph subgraph]
     QH -->|next_step| R[Deep Research]
     R --> CS[Content Strategist]
     CS --> B[SEO Blog Writer]
@@ -50,7 +53,7 @@ flowchart LR
     I --> F[Finalize]
     QH -.skip / subset.-> B & L & I & F
     subgraph Services [Service abstraction layer]
-      LLM[LLM chain<br/>OpenAI → Claude → Gemini → Mock]
+      LLM[LangChain LLMGateway<br/>ChatOpenAI → ChatAnthropic → ChatGoogleGenerativeAI → Mock]
       S[Research chain<br/>SERP → Perplexity → Tavily → Mock]
       IMG[Image chain<br/>DALL-E 3 → DALL-E 2 → Stability → Placeholder]
       C[(TTL cache)]
@@ -69,22 +72,25 @@ blog-only, image-only, refinements and full campaigns. See [docs/architecture.md
 ```
 contentblitz/
 ├── src/
-│   ├── agents/              # The six agents (+ base class)
+│   ├── agents/              # The six agents, each a LangGraph subgraph (+ base class)
 │   │   ├── query_handler.py   research_agent.py   content_strategist.py
-│   │   └── blog_writer.py     linkedin_writer.py  image_generator.py
+│   │   ├── blog_writer.py     linkedin_writer.py  image_generator.py
+│   │   └── prompts.py (ChatPromptTemplates)  schemas.py (structured-output models)
 │   ├── core/                # config.py, router.py, workflow.py (engine facade), resilience.py
-│   ├── integrations/        # Provider adapters + fallback chains
-│   │   ├── base.py  openai_client.py  llm_clients.py (Claude, Gemini)
+│   ├── integrations/        # LLM gateway (LangChain) + search/image adapters with fallback chains
+│   │   ├── llm_gateway.py (ChatOpenAI/ChatAnthropic/ChatGoogleGenerativeAI, retries, fallbacks, mock)
+│   │   ├── base.py  openai_client.py (DALL-E)
 │   │   ├── serp_client.py  perplexity_client.py (Perplexity, Tavily)
 │   │   ├── image_clients.py (Stability, placeholder)  mock_client.py  service_factory.py
-│   ├── utils/               # content_optimization.py, quality_validation.py, templates.py, export_tools.py
+│   ├── utils/               # content_optimization.py, quality_validation.py, source_verification.py, templates.py, export_tools.py
 │   ├── workflow/            # langgraph_workflow.py, state_management.py
 │   ├── api/                 # FastAPI: REST + Server-Sent Events, serves the built UI
 │   └── cli.py
 ├── frontend/                # React + TypeScript (Vite): src/components, src/api.ts, tests
+├── scripts/benchmark.py     # latency / cost / quality per provider configuration
 ├── tests/{unit,integration,e2e}/
 ├── config/{services,development,production,test}.yaml
-├── docs/                    # architecture, API, deployment, technical design, service comparison, demo script
+├── docs/                    # architecture, API, deployment, technical design, service comparison, demo script, benchmarks/
 ├── Dockerfile  docker-compose.yml  Makefile  requirements*.txt  .env.example
 └── .github/workflows/ci.yml
 ```
@@ -109,6 +115,8 @@ uvicorn src.api.server:app --port 8000
 ```
 
 Open http://localhost:8000. API keys can also be pasted into Settings; they stay in that browser tab's memory only.
+To point at an OpenAI-compatible endpoint (Azure OpenAI, vLLM, Ollama), set `models.openai.base_url` in
+`config/services.yaml`.
 
 **Frontend development (hot reload):** run `make api` (FastAPI on :8000) and `make web` (Vite on :5173, proxying
 `/api`), then open http://localhost:5173.
@@ -132,6 +140,7 @@ Open http://localhost:8000. API keys can also be pasted into Settings; they stay
 | `CONTENTBLITZ_MEMORY` | `memory` (default) or `sqlite` to keep conversations across server restarts |
 | `CONTENTBLITZ_MEMORY_PATH` | SQLite file for conversation memory (default `contentblitz_memory.sqlite`; Docker: `/data/...`) |
 | `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` |
+| `LANGSMITH_TRACING` · `LANGSMITH_API_KEY` · `LANGSMITH_PROJECT` | LangSmith tracing of every agent node and model call (optional) |
 
 ---
 
@@ -169,13 +178,17 @@ the live OpenAPI docs are at http://localhost:8000/docs.
 
 ## 🔁 Error handling & fallbacks
 
-1. **Within a provider:** HTTP 429/5xx/network errors retry with exponential backoff and jitter; 401/403/4xx fail fast.
-2. **Across providers:** `ProviderChain` moves to the next provider and records each attempt (shown in the UI).
+1. **Within a provider:** rate-limit, timeout, connection and 5xx errors retry with exponential backoff and jitter
+   (LangChain `with_retry` for models, the same policy for search/image adapters); auth and bad-request errors fail fast.
+2. **Across providers:** LangChain `with_fallbacks` (models) and `ProviderChain` (search, images) move to the next
+   provider; every attempt is recorded and shown in the UI. Invalid structured output also triggers the fallback.
 3. **Within an agent:** research falls back to an extractive summary if every LLM fails; writers fall back to
    research keywords if keyword generation fails; image prompt enhancement falls back to a template.
 4. **Across agents:** each LangGraph node is wrapped, so a failed agent is reported in the reply while the rest
    still deliver. Dependants (the strategist after failed research) are skipped cleanly.
 5. **Last resort:** mock LLM/search and the local placeholder renderer keep the app usable during a full outage.
+6. **Inside agents:** subgraph steps degrade on their own (heuristic routing, extractive research summary, default
+   hashtags, template image prompt, placeholder image when a download fails).
 
 ## 💰 Performance & cost tips
 
@@ -187,6 +200,9 @@ the live OpenAPI docs are at http://localhost:8000/docs.
 - Settings → **Usage since the server started** shows API calls, estimated cost, cache hits and the active writing chain
   for your provider configuration (`POST /api/usage` returns the full breakdown, including tokens).
 - For development, Gemini Flash's free tier plus Tavily's free tier is the cheapest live configuration.
+- Research searches run in parallel, so a research turn takes about as long as the slowest single search.
+- Measure before you choose: `make bench-live LABEL=... ARGS="--llm anthropic"` writes a latency/cost/quality
+  report to `docs/benchmarks/` (see [service comparison](docs/service_comparison.md)).
 
 ## 🛠️ Troubleshooting
 
@@ -215,4 +231,4 @@ the live OpenAPI docs are at http://localhost:8000/docs.
 ## 🧭 Roadmap (stretch)
 
 CMS publishing (WordPress REST / Ghost / Medium) on top of the existing WXR export, Buffer/Hootsuite scheduling via
-the scheduler JSON payload, LangSmith tracing, and fine-tuned brand-voice models.
+the scheduler JSON payload, LLM-as-judge fact-checking against full source pages, and fine-tuned brand-voice models.

@@ -113,3 +113,25 @@ def test_load_settings_layers(monkeypatch):
 def test_mock_env_flag(monkeypatch):
     monkeypatch.setenv("CONTENTBLITZ_MOCK", "1")
     assert load_settings().use_mock is True
+
+
+def test_langsmith_tracing_flag(monkeypatch):
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    monkeypatch.delenv("LANGCHAIN_API_KEY", raising=False)
+    assert load_settings().tracing is False          # no key, no tracing
+    monkeypatch.setenv("LANGSMITH_API_KEY", "ls-test")
+    monkeypatch.delenv("LANGSMITH_PROJECT", raising=False)
+    import os
+
+    assert load_settings().tracing is True and os.environ["LANGSMITH_PROJECT"] == "contentblitz"
+    monkeypatch.setenv("LANGSMITH_TRACING", "false")
+    assert load_settings().tracing is False
+
+
+def test_cost_matches_versioned_model_ids():
+    t = UsageTracker()
+    assert t.record("openai", "gpt-4o-2024-08-06", "llm", 1000, 0).cost_usd == pytest.approx(0.0025)
+    assert t.record("openai", "gpt-4o-mini-2024-07-18", "llm", 1000, 0).cost_usd == pytest.approx(0.00015)
+    assert t.record("gemini", "models/gemini-2.0-flash-001", "llm", 1000, 0).cost_usd == pytest.approx(0.0001)
+    assert t.record("x", "unknown-model", "llm", 1000, 1000).cost_usd == 0

@@ -24,10 +24,40 @@ export interface Quality {
   details?: Record<string, unknown>;
 }
 
+export interface Credibility {
+  domain: string;
+  score: number;
+  tier: "high" | "medium" | "low";
+  reasons: string[];
+}
+
 export interface Source {
   title: string;
   url: string;
   snippet?: string;
+  credibility?: Credibility;
+}
+
+export type ClaimStatus = "supported" | "weak" | "unverified" | "uncited" | "invalid_citation";
+
+export interface ClaimCheck {
+  claim: string;
+  kind: "finding" | "statistic";
+  citations: number[];
+  status: ClaimStatus;
+  note: string;
+}
+
+export interface Verification {
+  claims: ClaimCheck[];
+  summary: {
+    avg_source_credibility: number;
+    high_credibility_sources: number;
+    low_credibility_sources: number;
+    claims_checked: number;
+    supported: number;
+    needs_review: number;
+  };
 }
 
 export interface Research {
@@ -43,6 +73,7 @@ export interface Research {
   search_providers: string[];
   analysis_provider: string;
   offline_demo?: boolean;
+  verification?: Verification;
   quality: Quality;
 }
 
@@ -131,6 +162,7 @@ export interface AppConfig {
   brand_voice: BrandVoice;
   key_providers: string[];
   env: string;
+  tracing?: boolean;
 }
 
 export interface ClientSettings {

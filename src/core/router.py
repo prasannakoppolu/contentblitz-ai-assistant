@@ -228,36 +228,25 @@ def heuristic_route(query: str, history_context: Optional[Dict[str, Any]] = None
     }
 
 
-ROUTER_SYSTEM = """You are the Query Handler for ContentBlitz, a multi-agent content marketing system.
-Agents: research (web research with sources), strategist (formats research into a readable report / brief),
-blog (SEO long-form article), linkedin (LinkedIn post with hashtags), image (visual generation).
-Rules:
-- Written content (blog/linkedin) should be preceded by research unless research on the same topic already exists.
-- "campaign" or multi-format requests -> research, strategist, blog, linkedin, image.
-- Edits of previous content ("make it shorter", "more casual") -> intents ["refine"], plan [<target agent>], refine_target.
-- Resolve pronouns ("it", "this") using the conversation context topic.
-- If nothing actionable and no topic, set needs_clarification true.
-Return JSON with keys: intents (list), plan (ordered list of agent names), topic (string), tone (string|null),
-templates (object agent->template), series_count (int), refine_target (string|null),
-needs_clarification (bool), confidence (0-1), reasoning (string)."""
-
-
 class IntelligentRouter:
-    """LLM router with schema validation and heuristic fallback."""
+    """LLM router (LangChain structured output → :class:`RouteDecision`) with validation and
+    a deterministic heuristic fallback. ``gateway`` is an :class:`LLMGateway`."""
 
-    def __init__(self, llm: Any):
-        self.llm = llm
+    def __init__(self, gateway: Any):
+        self.gateway = gateway
 
     def route(self, query: str, history_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        from src.agents.prompts import ROUTER
+        from src.agents.schemas import RouteDecision
+
         baseline = heuristic_route(query, history_context)
-        prompt = (f"Conversation context: {json.dumps(history_context or {}, default=str)}\n\n"
-                  f"User request: {query}\n\nReturn the routing JSON.")
         try:
-            resp = self.llm.generate(prompt, ROUTER_SYSTEM, temperature=0, max_tokens=400, json_mode=True,
-                                     tier="fast", task="route",
-                                     context={"query": query, "history_context": history_context})
-            decision = self._validate(parse_json(resp.text), baseline)
-            decision["router"] = "llm" if resp.provider != "mock" else "heuristic"
+            model = self.gateway.runnable(tier="fast", temperature=0, max_tokens=500, schema=RouteDecision)
+            result = self.gateway.invoke(
+                ROUTER | model, {"history": json.dumps(history_context or {}, default=str), "query": query},
+                task="route", context={"query": query, "history_context": history_context}, run_name="query_handler.route")
+            decision = self._validate(result.output.model_dump(), baseline)
+            decision["router"] = "llm" if result.provider not in (None, "mock") else "heuristic"
             return decision
         except Exception as exc:  # noqa: BLE001 - router must never crash the workflow
             logger.warning("LLM router failed, using heuristic fallback: %s", exc)

@@ -102,6 +102,7 @@ class Settings:
     max_refinement_loops: int = 1
     output_dir: Path = PROJECT_ROOT / "outputs"
     log_level: str = "INFO"
+    tracing: bool = False          # LangSmith tracing (LANGSMITH_TRACING=true + LANGSMITH_API_KEY)
     brand_voice: BrandVoiceConfig = field(default_factory=BrandVoiceConfig)
     raw: Dict[str, Any] = field(default_factory=dict)
 
@@ -123,9 +124,20 @@ class Settings:
         }
 
 
+def configure_tracing() -> bool:
+    """Enable LangSmith tracing when requested. LangChain and LangGraph read these
+    variables themselves and trace every chain, model call and graph node."""
+    enabled = os.getenv("LANGSMITH_TRACING", os.getenv("LANGCHAIN_TRACING_V2", "")).lower() in {"1", "true", "yes"}
+    if enabled and os.getenv("LANGSMITH_API_KEY", os.getenv("LANGCHAIN_API_KEY")):
+        os.environ.setdefault("LANGSMITH_PROJECT", "contentblitz")
+        return True
+    return False
+
+
 def load_settings(env: Optional[str] = None, overrides: Optional[Dict[str, Any]] = None) -> Settings:
     """Build a :class:`Settings` object from YAML files, env vars and overrides."""
     _load_dotenv(PROJECT_ROOT / ".env")
+    tracing = configure_tracing()
     env = env or os.getenv("APP_ENV", "development")
 
     data = deep_merge(_read_yaml(CONFIG_DIR / "services.yaml"), _read_yaml(CONFIG_DIR / f"{env}.yaml"))
@@ -156,6 +168,7 @@ def load_settings(env: Optional[str] = None, overrides: Optional[Dict[str, Any]]
         max_refinement_loops=int(app.get("max_refinement_loops", 1)),
         output_dir=Path(os.getenv("CONTENTBLITZ_OUTPUT_DIR", app.get("output_dir", str(PROJECT_ROOT / "outputs")))),
         log_level=os.getenv("LOG_LEVEL", app.get("log_level", "INFO")),
+        tracing=tracing,
         brand_voice=BrandVoiceConfig(**{k: v for k, v in brand.items() if k in BrandVoiceConfig.__dataclass_fields__}),
         raw=data,
     )

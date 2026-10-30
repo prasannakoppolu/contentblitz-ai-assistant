@@ -3,7 +3,6 @@ import json
 import pytest
 
 from src.core.router import IntelligentRouter, extract_topic, heuristic_route, parse_json, same_topic
-from src.integrations.base import LLMResponse
 
 
 @pytest.mark.parametrize("query,topic", [
@@ -90,23 +89,49 @@ def test_same_topic():
     assert not same_topic("", "x")
 
 
-class _LLM:
-    def __init__(self, text, provider="openai"):
-        self.text, self.provider = text, provider
+def _gateway_returning(settings, text, include_mock=True):
+    """Gateway whose primary 'openai' model is a fake LangChain chat model returning ``text``."""
+    from langchain_core.language_models.chat_models import BaseChatModel
+    from langchain_core.messages import AIMessage
+    from langchain_core.outputs import ChatGeneration, ChatResult
+    from langchain_core.runnables import RunnableLambda
 
-    def generate(self, *a, **k):
-        return LLMResponse(self.text, self.provider, "gpt-4o-mini")
+    from src.integrations.llm_gateway import LLMGateway
+
+    class StaticChatModel(BaseChatModel):
+        @property
+        def _llm_type(self):
+            return "static"
+
+        def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=text))])
+
+        def with_structured_output(self, schema, **kwargs):
+            return self | RunnableLambda(lambda m: schema.model_validate(parse_json(m.content)))
+
+    gw = LLMGateway(settings)
+    gw.extra_models = [("openai", StaticChatModel())]
+    gw.include_mock = include_mock
+    return gw
 
 
-def test_llm_router_enforces_research_first_and_validates_agents():
-    router = IntelligentRouter(_LLM(json.dumps({"intents": ["blog"], "plan": ["blog", "tiktok"], "topic": "edge AI"})))
-    d = router.route("write a blog about edge AI")
+def test_llm_router_enforces_research_first_and_validates_agents(settings):
+    decision = json.dumps({"intents": ["blog"], "plan": ["blog"], "topic": "edge AI"})
+    d = IntelligentRouter(_gateway_returning(settings, decision)).route("write a blog about edge AI")
     assert d["plan"] == ["research", "blog"]
     assert d["topic"] == "edge AI"
     assert d["router"] == "llm"
 
 
-def test_llm_router_falls_back_on_invalid_output():
-    d = IntelligentRouter(_LLM("I think you want a blog")).route("write a blog about edge AI")
+def test_llm_router_rejects_unknown_agents_via_schema(settings):
+    bad = json.dumps({"plan": ["blog", "tiktok"], "topic": "edge AI"})
+    # Schema validation fails on the primary model, so the chain falls back to the offline model.
+    d = IntelligentRouter(_gateway_returning(settings, bad)).route("write a blog about edge AI")
+    assert d["plan"] == ["research", "blog"] and d["router"] == "heuristic"
+
+
+def test_llm_router_falls_back_on_invalid_output(settings):
+    d = IntelligentRouter(_gateway_returning(settings, "I think you want a blog", include_mock=False)).route(
+        "write a blog about edge AI")
     assert d["router"] == "heuristic-fallback"
     assert d["plan"] == ["research", "blog"]

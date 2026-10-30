@@ -191,6 +191,7 @@ def create_app(base_overrides: Optional[Dict[str, Any]] = None, env: Optional[st
             "brand_voice": asdict(s.brand_voice),
             "key_providers": KEY_PROVIDERS,
             "env": s.env,
+            "tracing": s.tracing,
         }
 
     @app.post("/api/threads")

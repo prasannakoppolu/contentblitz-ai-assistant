@@ -1,0 +1,437 @@
+{
+  "meta": {
+    "label": "offline-mock",
+    "date": "2026-10-29",
+    "runs": 3,
+    "offline": true,
+    "chains": {
+      "llm": [
+        "mock"
+      ],
+      "research": [
+        "mock"
+      ],
+      "image": [
+        "placeholder"
+      ]
+    }
+  },
+  "summary": {
+    "research": {
+      "runs": 3,
+      "latency_p50_s": 0.02,
+      "latency_max_s": 1.49,
+      "llm_calls": 4,
+      "tokens": 3239,
+      "cost_usd": 0.0,
+      "avg_quality": 83,
+      "failed_attempts": 0,
+      "agent_errors": 0,
+      "providers": [
+        "mock"
+      ]
+    },
+    "blog": {
+      "runs": 3,
+      "latency_p50_s": 0.04,
+      "latency_max_s": 0.04,
+      "llm_calls": 5,
+      "tokens": 4320,
+      "cost_usd": 0.0,
+      "avg_quality": 87.5,
+      "failed_attempts": 0,
+      "agent_errors": 0,
+      "providers": [
+        "mock"
+      ]
+    },
+    "linkedin": {
+      "runs": 3,
+      "latency_p50_s": 0.04,
+      "latency_max_s": 0.04,
+      "llm_calls": 5,
+      "tokens": 2590,
+      "cost_usd": 0.0,
+      "avg_quality": 89.5,
+      "failed_attempts": 0,
+      "agent_errors": 0,
+      "providers": [
+        "mock"
+      ]
+    },
+    "image": {
+      "runs": 3,
+      "latency_p50_s": 0.02,
+      "latency_max_s": 0.05,
+      "llm_calls": 2,
+      "tokens": 556,
+      "cost_usd": 0.0,
+      "avg_quality": 80,
+      "failed_attempts": 0,
+      "agent_errors": 0,
+      "providers": [
+        "mock",
+        "placeholder"
+      ]
+    },
+    "campaign": {
+      "runs": 3,
+      "latency_p50_s": 0.06,
+      "latency_max_s": 0.06,
+      "llm_calls": 10,
+      "tokens": 6891,
+      "cost_usd": 0.0,
+      "avg_quality": 88.2,
+      "failed_attempts": 0,
+      "agent_errors": 0,
+      "providers": [
+        "mock",
+        "placeholder"
+      ]
+    }
+  },
+  "results": [
+    {
+      "scenario": "research",
+      "run": 0,
+      "latency_s": 1.49,
+      "agent_latency_s": {
+        "query_handler": 1.46,
+        "research": 0.02,
+        "strategist": 0.01
+      },
+      "llm_calls": 4,
+      "failed_attempts": 0,
+      "tokens": 3239,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock"
+      ],
+      "quality": {
+        "research": 83
+      },
+      "errors": []
+    },
+    {
+      "scenario": "research",
+      "run": 1,
+      "latency_s": 0.02,
+      "agent_latency_s": {
+        "query_handler": 0.0,
+        "research": 0.01,
+        "strategist": 0.0
+      },
+      "llm_calls": 4,
+      "failed_attempts": 0,
+      "tokens": 3239,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock"
+      ],
+      "quality": {
+        "research": 83
+      },
+      "errors": []
+    },
+    {
+      "scenario": "research",
+      "run": 2,
+      "latency_s": 0.02,
+      "agent_latency_s": {
+        "query_handler": 0.0,
+        "research": 0.01,
+        "strategist": 0.0
+      },
+      "llm_calls": 4,
+      "failed_attempts": 0,
+      "tokens": 3239,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock"
+      ],
+      "quality": {
+        "research": 83
+      },
+      "errors": []
+    },
+    {
+      "scenario": "blog",
+      "run": 0,
+      "latency_s": 0.04,
+      "agent_latency_s": {
+        "query_handler": 0.0,
+        "research": 0.01,
+        "blog": 0.02
+      },
+      "llm_calls": 5,
+      "failed_attempts": 0,
+      "tokens": 4320,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock"
+      ],
+      "quality": {
+        "research": 83,
+        "blog": 92
+      },
+      "errors": []
+    },
+    {
+      "scenario": "blog",
+      "run": 1,
+      "latency_s": 0.04,
+      "agent_latency_s": {
+        "query_handler": 0.01,
+        "research": 0.01,
+        "blog": 0.01
+      },
+      "llm_calls": 5,
+      "failed_attempts": 0,
+      "tokens": 4320,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock"
+      ],
+      "quality": {
+        "research": 83,
+        "blog": 92
+      },
+      "errors": []
+    },
+    {
+      "scenario": "blog",
+      "run": 2,
+      "latency_s": 0.03,
+      "agent_latency_s": {
+        "query_handler": 0.0,
+        "research": 0.01,
+        "blog": 0.01
+      },
+      "llm_calls": 5,
+      "failed_attempts": 0,
+      "tokens": 4320,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock"
+      ],
+      "quality": {
+        "research": 83,
+        "blog": 92
+      },
+      "errors": []
+    },
+    {
+      "scenario": "linkedin",
+      "run": 0,
+      "latency_s": 0.04,
+      "agent_latency_s": {
+        "query_handler": 0.01,
+        "research": 0.01,
+        "linkedin": 0.02
+      },
+      "llm_calls": 5,
+      "failed_attempts": 0,
+      "tokens": 2590,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock"
+      ],
+      "quality": {
+        "research": 83,
+        "linkedin": 96
+      },
+      "errors": []
+    },
+    {
+      "scenario": "linkedin",
+      "run": 1,
+      "latency_s": 0.04,
+      "agent_latency_s": {
+        "query_handler": 0.01,
+        "research": 0.01,
+        "linkedin": 0.01
+      },
+      "llm_calls": 5,
+      "failed_attempts": 0,
+      "tokens": 2590,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock"
+      ],
+      "quality": {
+        "research": 83,
+        "linkedin": 96
+      },
+      "errors": []
+    },
+    {
+      "scenario": "linkedin",
+      "run": 2,
+      "latency_s": 0.03,
+      "agent_latency_s": {
+        "query_handler": 0.01,
+        "research": 0.01,
+        "linkedin": 0.01
+      },
+      "llm_calls": 5,
+      "failed_attempts": 0,
+      "tokens": 2590,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock"
+      ],
+      "quality": {
+        "research": 83,
+        "linkedin": 96
+      },
+      "errors": []
+    },
+    {
+      "scenario": "image",
+      "run": 0,
+      "latency_s": 0.05,
+      "agent_latency_s": {
+        "query_handler": 0.01,
+        "image": 0.04
+      },
+      "llm_calls": 2,
+      "failed_attempts": 0,
+      "tokens": 556,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock",
+        "placeholder"
+      ],
+      "quality": {
+        "image": 80
+      },
+      "errors": []
+    },
+    {
+      "scenario": "image",
+      "run": 1,
+      "latency_s": 0.02,
+      "agent_latency_s": {
+        "query_handler": 0.0,
+        "image": 0.01
+      },
+      "llm_calls": 2,
+      "failed_attempts": 0,
+      "tokens": 556,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock",
+        "placeholder"
+      ],
+      "quality": {
+        "image": 80
+      },
+      "errors": []
+    },
+    {
+      "scenario": "image",
+      "run": 2,
+      "latency_s": 0.02,
+      "agent_latency_s": {
+        "query_handler": 0.0,
+        "image": 0.01
+      },
+      "llm_calls": 2,
+      "failed_attempts": 0,
+      "tokens": 556,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock",
+        "placeholder"
+      ],
+      "quality": {
+        "image": 80
+      },
+      "errors": []
+    },
+    {
+      "scenario": "campaign",
+      "run": 0,
+      "latency_s": 0.06,
+      "agent_latency_s": {
+        "query_handler": 0.0,
+        "research": 0.01,
+        "strategist": 0.01,
+        "blog": 0.01,
+        "linkedin": 0.01,
+        "image": 0.02
+      },
+      "llm_calls": 10,
+      "failed_attempts": 0,
+      "tokens": 6891,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock",
+        "placeholder"
+      ],
+      "quality": {
+        "research": 83,
+        "blog": 94,
+        "linkedin": 96,
+        "image": 80
+      },
+      "errors": []
+    },
+    {
+      "scenario": "campaign",
+      "run": 1,
+      "latency_s": 0.06,
+      "agent_latency_s": {
+        "query_handler": 0.0,
+        "research": 0.01,
+        "strategist": 0.01,
+        "blog": 0.01,
+        "linkedin": 0.01,
+        "image": 0.02
+      },
+      "llm_calls": 10,
+      "failed_attempts": 0,
+      "tokens": 6891,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock",
+        "placeholder"
+      ],
+      "quality": {
+        "research": 83,
+        "blog": 94,
+        "linkedin": 96,
+        "image": 80
+      },
+      "errors": []
+    },
+    {
+      "scenario": "campaign",
+      "run": 2,
+      "latency_s": 0.06,
+      "agent_latency_s": {
+        "query_handler": 0.0,
+        "research": 0.01,
+        "strategist": 0.01,
+        "blog": 0.01,
+        "linkedin": 0.01,
+        "image": 0.02
+      },
+      "llm_calls": 10,
+      "failed_attempts": 0,
+      "tokens": 6891,
+      "cost_usd": 0.0,
+      "providers": [
+        "mock",
+        "placeholder"
+      ],
+      "quality": {
+        "research": 83,
+        "blog": 94,
+        "linkedin": 96,
+        "image": 80
+      },
+      "errors": []
+    }
+  ]
+}

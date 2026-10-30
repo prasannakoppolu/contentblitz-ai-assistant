@@ -1,42 +1,16 @@
-"""OpenAI integrations: GPT-4o chat completions and DALL-E 3 / DALL-E 2 images."""
+"""OpenAI integrations.
+
+GPT-4o chat is served by LangChain's ``ChatOpenAI`` (see :mod:`src.integrations.llm_gateway`);
+this module holds the DALL-E 3 / DALL-E 2 image provider.
+"""
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from src.core.resilience import ProviderError
-from src.integrations.base import HTTPProviderMixin, ImageProvider, ImageResponse, LLMProvider, LLMResponse
+from src.integrations.base import HTTPProviderMixin, ImageProvider, ImageResponse
 
 OPENAI_BASE = "https://api.openai.com/v1"
-
-
-class OpenAIChatProvider(HTTPProviderMixin, LLMProvider):
-    name = "openai"
-
-    def __init__(self, api_key: str, models: Optional[Dict[str, str]] = None, timeout: int = 60,
-                 max_retries: int = 3, retry_base_delay: float = 1.0, base_url: str = OPENAI_BASE):
-        self.api_key = api_key
-        self.models = models or {"fast": "gpt-4o-mini", "standard": "gpt-4o", "premium": "gpt-4o"}
-        self.model = self.models.get("standard", "gpt-4o")
-        self.timeout, self.max_retries, self.retry_base_delay = timeout, max_retries, retry_base_delay
-        self.base_url = base_url
-
-    def generate(self, prompt: str, system: str = "", *, temperature: float = 0.7, max_tokens: int = 2000,
-                 json_mode: bool = False, tier: str = "standard", task: str = "general",
-                 context: Optional[Dict[str, Any]] = None) -> LLMResponse:
-        model = self.models.get(tier) or self.model
-        messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}]
-        payload: Dict[str, Any] = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
-        resp = self._request("POST", f"{self.base_url}/chat/completions",
-                             headers={"Authorization": f"Bearer {self.api_key}"}, json=payload)
-        data = resp.json()
-        try:
-            text = data["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError) as exc:
-            raise ProviderError(self.name, f"unexpected response shape: {exc}") from exc
-        usage = data.get("usage", {})
-        return LLMResponse(text, self.name, model, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
 
 
 class DallEProvider(HTTPProviderMixin, ImageProvider):

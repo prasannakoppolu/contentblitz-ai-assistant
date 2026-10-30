@@ -1,11 +1,18 @@
-"""Query Handler Agent: understands intent and plans which agents run."""
+"""Query Handler Agent: understands intent and plans which agents run.
+
+Subgraph::
+
+    START → understand → route (LLM structured output, heuristic fallback) → plan → END
+"""
 from __future__ import annotations
 
 import time
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, TypedDict
+
+from langgraph.graph import END, START, StateGraph
 
 from src.agents.base import BaseAgent
-from src.core.router import IntelligentRouter, same_topic as _same_topic
+from src.core.router import IntelligentRouter, same_topic
 from src.workflow.state_management import history_context, trace_entry
 
 HELP_TEXT = (
@@ -19,50 +26,74 @@ HELP_TEXT = (
 )
 
 
+class QHState(TypedDict, total=False):
+    query: str
+    context: Dict[str, Any]
+    research_topic: str
+    decision: Dict[str, Any]
+    plan: List[str]
+    topic: str
+    needs_clarification: bool
+
+
 class QueryHandlerAgent(BaseAgent):
     name = "query_handler"
     description = "Analyses the request with conversation context and routes it to specialised agents."
 
     def __init__(self, services):
-        super().__init__(services)
         self.router = IntelligentRouter(services.llm)
+        super().__init__(services)
 
+    # -- graph -------------------------------------------------------------------
+    def build_graph(self):
+        g = StateGraph(QHState)
+        g.add_node("route", self._route)
+        g.add_node("plan", self._plan)
+        g.add_edge(START, "route")
+        g.add_edge("route", "plan")
+        g.add_edge("plan", END)
+        return g.compile()
+
+    def _route(self, s: QHState) -> Dict[str, Any]:
+        return {"decision": self.router.route(s["query"], s["context"])}
+
+    @staticmethod
+    def _plan(s: QHState) -> Dict[str, Any]:
+        decision = dict(s["decision"])
+        plan = list(decision.get("plan", []))
+        topic = decision.get("topic") or s["context"].get("last_topic") or ""
+        # Reuse research already gathered for this topic (cost optimisation, context preservation).
+        if "research" in plan and same_topic(s.get("research_topic", ""), topic):
+            writes = any(a in plan for a in ("blog", "linkedin", "image"))
+            if writes and "research" not in decision.get("intents", []):
+                plan = [a for a in plan if a not in ("research", "strategist")]
+                decision["reasoning"] = (decision.get("reasoning", "") + "; reusing research from earlier").strip("; ")
+        needs_clarification = bool(decision.get("needs_clarification")) or not plan or not topic
+        return {"decision": decision, "plan": [] if needs_clarification else plan, "topic": topic,
+                "needs_clarification": needs_clarification}
+
+    # -- workflow node ---------------------------------------------------------
     def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         started = time.time()
-        query = state.get("user_query", "")
         ctx = history_context(state)
-        decision = self.router.route(query, ctx)
-
-        plan = list(decision.get("plan", []))
-        topic = decision.get("topic") or ctx.get("last_topic") or ""
-
-        # Reuse existing research for the same topic (cost optimisation, context preservation).
-        research = state.get("research") or {}
-        if "research" in plan and research and _same_topic(research.get("topic", ""), topic):
-            only_research = not any(a in plan for a in ("blog", "linkedin", "image"))
-            if not only_research and "research" not in decision.get("intents", []):
-                plan = [a for a in plan if a not in ("research", "strategist")]
-                decision["reasoning"] = (decision.get("reasoning", "") + "; reusing research from earlier in the conversation").strip("; ")
-
-        needs_clarification = bool(decision.get("needs_clarification")) or (not plan)
-        if plan and not topic:
-            needs_clarification = True
-
-        feedback = query if decision.get("refine_target") else None
+        research: Optional[Dict[str, Any]] = state.get("research")
+        out = self.invoke_graph({"query": state.get("user_query", ""), "context": ctx,
+                                 "research_topic": (research or {}).get("topic", "")})
+        decision, plan, clarify = out["decision"], out["plan"], out["needs_clarification"]
+        topic = out["topic"] if not clarify else (ctx.get("last_topic") or "")
         detail = f"plan={plan or ['clarify']} topic='{topic}' via {decision.get('router')}"
         return {
             "route": decision,
-            "plan": plan if not needs_clarification else [],
+            "plan": plan,
             "completed": [],
             "errors": [],
             "trace": [trace_entry(self.name, "ok", detail, provider=self.services.llm.last_provider, started=started)],
-            "topic": topic if not needs_clarification else (ctx.get("last_topic") or ""),
+            "topic": topic,
             "tone": decision.get("tone"),
             "templates": decision.get("templates") or {},
             "series_count": int(decision.get("series_count") or 0),
             "refine_target": decision.get("refine_target"),
-            "feedback": feedback,
-            "needs_clarification": needs_clarification,
-            "response": HELP_TEXT if needs_clarification else "",
+            "feedback": state.get("user_query") if decision.get("refine_target") else None,
+            "needs_clarification": clarify,
+            "response": HELP_TEXT if clarify else "",
         }
-

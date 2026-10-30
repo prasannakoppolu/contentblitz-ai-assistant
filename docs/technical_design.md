@@ -14,7 +14,7 @@
 | D1 | **Single dynamic graph** (plan + `next_step`) instead of one graph per workflow | Less visual specificity per workflow, but any agent subset/order works with no new wiring, including refinements and future agents |
 | D2 | **LLM router + heuristic fallback + validation** | Extra small call per turn (~$0.0002 on 4o-mini) buys robust follow-up resolution; heuristic guarantees routing works during outages and in tests |
 | D3 | **Research-first enforced in validation** | Slightly higher cost for written content, but every blog/post is grounded in cited sources (credibility, E-E-A-T) |
-| D4 | **Raw HTTP adapters, not vendor SDKs** | We maintain request shapes, but get uniform retry/error classification (429/5xx retry, 401/403 fail-fast) across 9 providers and a small dependency footprint |
+| D4 | **LangChain chat models for LLMs; HTTP adapters for search and images** | `ChatOpenAI`/`ChatAnthropic`/`ChatGoogleGenerativeAI` give structured output, `with_retry`/`with_fallbacks` and LangSmith tracing for free. Search and image APIs have uneven LangChain support, so they keep small adapters with the same retry semantics |
 | D5 | **Mock providers as last link of every chain** | Content during a total outage is templated rather than AI-written, which is clearly labelled in the UI; in exchange the product stays usable, and tests/CI/demos need no keys |
 | D6 | **Artefacts tagged with topic** | Prevents stale research/brief reuse when the user switches topics mid-conversation |
 | D7 | **Deterministic quality scoring** (rules + metrics), not LLM-as-judge | Cheap, explainable, testable; LLM judge could be added as an extra dimension |
@@ -22,20 +22,30 @@
 | D9 | **Checkpointer memory** (MemorySaver, or SqliteSaver via `CONTENTBLITZ_MEMORY=sqlite`) | Simple, no infra. Multi-instance deployments should switch to `PostgresSaver` |
 | D10 | **React SPA + FastAPI with SSE** (replacing Streamlit) | Two codebases (TS + Python) instead of one, but real-time agent progress, side-by-side editing, responsive layout and conventional deployment; the API is also reusable by other clients |
 | D11 | **Keys sent per request, engines cached by hashed config** | Keys travel with each call (HTTPS required in production) but are never stored server-side; LRU cap bounds memory |
+| D12 | **Each agent is a LangGraph subgraph** | Slightly more code than plain functions, but loops (blog self-correction, LinkedIn length guard), parallel branches (research fan-out, strategist, LinkedIn draft ‖ hashtags) and fallbacks are explicit, testable graph structure and show up node by node in LangSmith |
+| D13 | **Deterministic fact-check** (credibility tiers + citation/number matching) | Cheap and explainable on every turn; checks against search snippets, so `unverified` means "confirm in the full source" rather than "false" |
 
 ## 3. Service integration patterns
 
 ```
-Agent ──► ProviderChain.generate(...) ──► Provider A ──► HTTPProviderMixin._request (retry/backoff)
-                                   └─fail─► Provider B ──► ...
-                                   └─fail─► Mock (always succeeds)
+Agent node ──► prompt | gateway.runnable(...)
+                 ChatOpenAI.with_retry(transient) ─fail─► ChatAnthropic.with_retry ─fail─► ChatGoogleGenerativeAI.with_retry ─fail─► MockChatModel
+Research   ──► ProviderChain: SERP API ─fail─► Perplexity ─fail─► Tavily ─fail─► Mock     (HTTPProviderMixin retry/backoff)
+Images     ──► ProviderChain: DALL-E 3 ─fail─► DALL-E 2 ─fail─► Stability ─fail─► local placeholder
 ```
 
-- **Retry policy:** `retry_with_backoff(max_retries, base_delay)`: delay = base·2^(n-1) + 10% jitter, capped at 20s.
-  Configured per environment (`development`: 2 retries / 0.5s; `production`: 4 / 1.5s).
-- **Classification:** network / 429 / 5xx → retryable `ProviderError`/`RateLimitError`; 401/403/other 4xx → non-retryable.
-- **Observability:** every attempt is recorded (`chain.attempts`, `UsageTracker`) with provider, model, latency, tokens,
-  estimated cost; surfaced in the live pipeline, the image "Provider attempts" table and the Settings usage panel (`POST /api/usage`).
+- **Retry policy (LLMs):** LangChain `with_retry(retry_if_exception_type=transient, stop_after_attempt=max_retries+1,
+  wait_exponential_jitter=True)`. Transient = rate limit, timeout, connection and 5xx errors of the OpenAI, Anthropic
+  and Google SDKs. SDK-level retries are off so there is one policy.
+- **Retry policy (search/images):** `retry_with_backoff(max_retries, base_delay)`: delay = base·2^(n-1) + 10% jitter,
+  capped at 20s. Configured per environment (`development`: 2 retries / 0.5s; `production`: 4 / 1.5s).
+- **Classification:** 429 / 5xx / network → retry on the same provider; 401/403/other 4xx and schema-validation
+  failures → move to the next provider immediately.
+- **Structured output:** routing, research analysis, briefs, keywords and hashtags use `with_structured_output`
+  with Pydantic schemas; invalid output from one provider falls back to the next, then to agent-level defaults.
+- **Observability:** a LangChain callback records every attempt (provider, model, latency, tokens, cost) into the
+  `UsageTracker` (Settings panel, `POST /api/usage`); LangSmith traces every subgraph node and model call when
+  `LANGSMITH_TRACING=true`; `scripts/benchmark.py` measures latency, cost and quality per configuration.
 - **Model tiers:** `fast` for routing, keywords, meta, hashtags and image prompts; `premium` for long-form.
 
 ## 4. Content quality validation & enhancement
@@ -50,6 +60,12 @@ Agent ──► ProviderChain.generate(...) ──► Provider A ──► HTTPP
 **Enhancement loop:** if a blog scores below `quality_threshold` (70 dev / 75 prod), the writer sends the top
 suggestions to an editor prompt and keeps the better version, up to `max_refinement_loops`. LinkedIn posts get a
 length-guard pass (expand/condense) before formatting. Human edits saved in the Content tab are re-scored by the API immediately.
+
+**Fact-checking:** after analysis, the research subgraph's `verify` node rates each source (government/academic and
+recognised research publishers high; established industry media medium; user-generated platforms low; recency and
+HTTPS adjust the score) and checks every finding and statistic: the `[n]` citation must exist, the cited source must
+share the claim's key terms, and any figure in the claim must appear in that source. Unconfirmed claims are flagged in
+the Research tab and lower the research quality score (`source_credibility` and `fact_check` dimensions).
 
 **Brand voice:** a `BrandVoiceConfig` (tone, audience, style rules, banned phrases, preferred terms) is injected into
 every writer prompt and validated afterwards (banned/generic phrases, tone markers, passive ratio, second-person use).

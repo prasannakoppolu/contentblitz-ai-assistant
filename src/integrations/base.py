@@ -9,6 +9,7 @@ vendor SDK directly and switching providers is a config change.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -162,7 +163,15 @@ class ProviderChain(Generic[P]):
         self.kind = kind
         self.providers = providers
         self.tracker = tracker or UsageTracker()
-        self.attempts: List[Dict[str, Any]] = []
+        self._local = threading.local()  # attempts are per-thread: research searches run in parallel
+
+    @property
+    def attempts(self) -> List[Dict[str, Any]]:
+        return getattr(self._local, "attempts", [])
+
+    @attempts.setter
+    def attempts(self, value: List[Dict[str, Any]]) -> None:
+        self._local.attempts = value
 
     @property
     def names(self) -> List[str]:
@@ -170,6 +179,7 @@ class ProviderChain(Generic[P]):
 
     def call(self, method: str, *args: Any, **kwargs: Any) -> Any:
         self.attempts = []
+        attempts = self.attempts
         errors: List[str] = []
         for provider in self.providers:
             name = getattr(provider, "name", type(provider).__name__)
@@ -180,11 +190,11 @@ class ProviderChain(Generic[P]):
                 elapsed = time.perf_counter() - start
                 logger.warning("%s provider '%s' failed: %s", self.kind, name, exc)
                 errors.append(f"{name}: {exc}")
-                self.attempts.append({"provider": name, "ok": False, "error": str(exc), "latency_s": round(elapsed, 3)})
+                attempts.append({"provider": name, "ok": False, "error": str(exc), "latency_s": round(elapsed, 3)})
                 self.tracker.record(name, getattr(provider, "model", name), self.kind, latency_s=elapsed, ok=False)
                 continue
             elapsed = time.perf_counter() - start
-            self.attempts.append({"provider": name, "ok": True, "latency_s": round(elapsed, 3)})
+            attempts.append({"provider": name, "ok": True, "latency_s": round(elapsed, 3)})
             self._track(name, provider, result, elapsed)
             return result
         raise AllProvidersFailedError(self.kind, errors)
