@@ -75,8 +75,9 @@ every writer prompt and validated afterwards (banned/generic phrases, tone marke
 
 1. Heuristic baseline: regex intent detection, refine detection, follow-up pronoun resolution, topic extraction
    (strip commands/content nouns/trailing clauses), template, tone and series detection.
-2. LLM decision (JSON) with conversation context; validated: unknown agents dropped, research-first enforced,
-   canonical ordering applied, missing fields filled from the baseline.
+2. LLM decision with conversation context via LangChain structured output (`RouteDecision`, fast tier): the schema
+   rejects unknown agents (falling back to the next provider), then research-first is enforced, canonical ordering
+   applied and missing fields filled from the baseline. If every model fails, the heuristic baseline is used.
 3. Query Handler post-processing: reuse same-topic research, clarification if no plan/topic.
 
 Ambiguous requests with a topic default to a research report; greetings and topic-less requests return help.
@@ -86,13 +87,16 @@ Ambiguous requests with a topic default to a research report; greetings and topi
 - **Stateless engine + external checkpointer:** run multiple API replicas behind a load balancer with
   `PostgresSaver` (LangGraph) for shared memory.
 - **Cache:** in-process TTL cache; swap for Redis to share across replicas (same `get/set` interface).
-- **Latency:** research sub-queries are independent and can be parallelised with a thread pool; image generation
-  can run concurrently with LinkedIn writing via a LangGraph fan-out edge.
+- **Latency:** research sub-queries already run in parallel (LangGraph `Send` fan-out), as do the strategist's
+  report/brief and the LinkedIn draft/hashtags; blog series parts run in parallel via `graph.batch`. Image
+  generation could also run concurrently with LinkedIn writing via a fan-out edge in the main graph.
 - **Throughput limits:** provider rate limits handled by backoff; multiple API keys can be modelled as additional
   providers in a chain.
-- **Cost envelope** (GPT-4o + SERP API + DALL-E 3, full campaign): ~6 LLM calls (~12k tokens ≈ $0.06), 3 searches
-  (≈ $0.03-0.05 on SERP API paid plans), 1 image ($0.04 standard 1024², $0.08 1792×1024) → roughly **$0.15-0.20 per campaign**.
-  Follow-ups that reuse research cost ~$0.02-0.03.
+- **Cost envelope** (GPT-4o + SERP API + DALL-E 3, full campaign): ~10 LLM calls, 5 of them on the cheap fast tier
+  (routing, brief, meta, hashtags, image prompt), ~15k tokens ≈ $0.06-0.09; 3 searches (≈ $0.03-0.05 on SERP API paid
+  plans); 1 image ($0.04 standard 1024², $0.08 1792×1024) → roughly **$0.15-0.20 per campaign**, plus ~$0.02-0.04 per
+  automatic blog rewrite. Follow-ups that reuse research cost ~$0.02-0.03. Call counts come from `make bench`
+  (see `docs/benchmarks/`); dollar figures are estimates from list prices until live benchmarks are run.
 
 ## 7. Security
 
@@ -103,3 +107,5 @@ Ambiguous requests with a topic default to a research report; greetings and topi
 - CORS is limited to the Vite dev origins; production serves UI and API from one origin.
 - No user data in URLs except provider-required query params (SERP API key per their API).
 - Docker image runs as a non-root user; outputs on a dedicated volume.
+- LangSmith tracing is off by default. When enabled, prompts, research content and generated drafts are sent to
+  LangSmith (API keys are not); enable it only for projects where that is acceptable.

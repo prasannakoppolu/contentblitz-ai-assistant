@@ -1,8 +1,8 @@
 # Service Comparison Analysis
 
 > Pricing is indicative public list pricing as of late 2026 and changes often; check provider pricing pages
-> before budgeting. §5 gives an evaluation protocol and a results table to fill in. Run it with your keys
-> (`python -m src.cli "<prompt>"` with different `fallback_chains`) to produce numbers for your own workload.
+> before budgeting. §5 gives the evaluation protocol, the benchmark script (`make bench` / `make bench-live`), the
+> measured offline baseline and a table for your live runs.
 
 ## 1. LLMs
 
@@ -14,6 +14,10 @@
 | Anthropic Claude Haiku | ~$1 / $5 | Fast, solid instruction following | Less depth | Fast tier when Claude is primary |
 | Google Gemini 2.0 Flash | ~$0.10 / $0.40 (free tier available) | Cheapest, generous free tier, native JSON mime type | Less consistent tone | Fallback #2; best for development |
 
+All three are used through LangChain (`ChatOpenAI`, `ChatAnthropic`, `ChatGoogleGenerativeAI`), so switching or
+reordering them is a config change and structured output works the same way on each. Any OpenAI-compatible model
+(Azure OpenAI, vLLM, Ollama, Together) can stand in for OpenAI via `models.openai.base_url`.
+
 ## 2. Research engines
 
 | Provider | Pricing model | Strengths | Weaknesses | Role |
@@ -24,7 +28,8 @@
 | You.com Search API | Usage-based | Web + news, LLM-ready snippets | Not integrated (same interface; easy to add) | — |
 
 **SERP API + GPT vs Perplexity Sonar:** SERP+GPT wins on *control and attribution* (we choose sources,
-de-duplicate, number them, and require `[n]` citations). Perplexity wins on *simplicity and latency* (1 call vs 4).
+de-duplicate, number them, and require `[n]` citations). Perplexity wins on *simplicity* (1 call instead of 3 parallel searches plus 1 analysis call); since the SERP searches
+run in parallel, the latency gap is roughly one search round-trip.
 ContentBlitz uses SERP first and lets Perplexity's pre-analysed answer enrich the LLM context when it's the active provider.
 
 ## 3. Image generation

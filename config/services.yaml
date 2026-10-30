@@ -1,11 +1,13 @@
 # Provider catalogue and fallback order. Providers without an API key are skipped
 # automatically; mock/placeholder are always appended last so the app never hard-fails.
 fallback_chains:
-  llm: [openai, anthropic, gemini]          # GPT-4o -> Claude Sonnet -> Gemini Flash -> mock
+  llm: [openai, anthropic, gemini]          # LangChain ChatOpenAI -> ChatAnthropic -> ChatGoogleGenerativeAI -> mock
   research: [serpapi, perplexity, tavily]   # SERP API + LLM -> Perplexity Sonar -> Tavily -> mock
   image: [dalle3, dalle2, stability]        # DALL-E 3 -> DALL-E 2 -> Stability -> placeholder
 
 # Model tiers: "fast" for routing/meta/hashtags (cheap), "standard"/"premium" for writing.
+# Optional per provider: base_url (OpenAI only) targets any OpenAI-compatible endpoint, e.g.
+#   openai: {base_url: "https://<resource>.openai.azure.com/openai/v1", standard: gpt-4o, ...}
 models:
   openai:
     fast: gpt-4o-mini

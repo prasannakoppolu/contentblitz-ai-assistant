@@ -40,7 +40,7 @@ The SPA is static: you can host `frontend/dist` on Vercel/Netlify/S3 and run the
 
 | File | Used when | Highlights |
 |---|---|---|
-| `config/services.yaml` | always (base) | Fallback chains, model tiers, brand voice, app defaults |
+| `config/services.yaml` | always (base) | Fallback chains, model tiers, optional `models.openai.base_url`, brand voice, app defaults |
 | `config/development.yaml` | `APP_ENV=development` (default) | DEBUG logs, quick retries |
 | `config/production.yaml` | `APP_ENV=production` | More retries, quality threshold 75, two refinement loops, `/data/outputs` |
 | `config/test.yaml` | `APP_ENV=test` | Mock providers, no retries |
