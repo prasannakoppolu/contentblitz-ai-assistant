@@ -39,33 +39,32 @@ conversational **React** interface (served by a FastAPI backend) with memory, qu
 ## 🏗️ Architecture
 
 ```mermaid
-flowchart LR
-    U([User]) --> UI[React UI<br/>Chat · Content · Research · Export]
-    UI -- REST + SSE --> API[FastAPI<br/>src/api/server.py]
-    API --> E[ContentBlitzEngine]
-    E --> G{{LangGraph StateGraph<br/>+ checkpointer memory}}
-    G --> QH[Query Handler<br/>each agent = LangGraph subgraph]
-    QH -->|next_step| R[Deep Research]
-    R --> CS[Content Strategist]
-    CS --> B[SEO Blog Writer]
-    B --> L[LinkedIn Writer]
-    L --> I[Image Generator]
-    I --> F[Finalize]
-    QH -.skip / subset.-> B & L & I & F
-    subgraph Services [Service abstraction layer]
-      LLM[LangChain LLMGateway<br/>ChatOpenAI → ChatAnthropic → ChatGoogleGenerativeAI → Mock]
-      S[Research chain<br/>SERP → Perplexity → Tavily → Mock]
-      IMG[Image chain<br/>DALL-E 3 → DALL-E 2 → Stability → Placeholder]
-      C[(TTL cache)]
-      T[(Usage tracker)]
+flowchart TB
+    U(["👤 User"]) --> UI["React SPA<br/>Chat · Content · Research · Export"]
+    UI -- "REST + SSE" --> API["FastAPI · src/api/server.py"]
+    API --> QH
+
+    subgraph SUP ["LangGraph supervising graph (ContentBlitzEngine) · each agent is its own subgraph"]
+        direction LR
+        QH["Query Handler<br/>route → plan"] -->|next_step| R["Deep Research<br/>3 parallel searches<br/>→ analyze → verify"]
+        R --> CS["Content Strategist<br/>report ‖ brief"]
+        CS --> B["SEO Blog Writer<br/>draft → evaluate ⇄ improve"]
+        B --> L["LinkedIn Writer<br/>draft ‖ hashtags<br/>→ length loop"]
+        L --> I["Image Generator<br/>enhance → generate<br/>→ store"]
+        I --> F["finalize"]
     end
-    R & CS & B & L & I & QH --- Services
+
+    SUP --> GW["LLMGateway (LangChain)<br/>ChatOpenAI → ChatAnthropic → ChatGoogleGenerativeAI → Mock<br/>with_retry · with_fallbacks · structured output"]
+    SUP --> PC["ProviderChains<br/>search: SERP → Perplexity → Tavily → Mock<br/>images: DALL-E 3 → DALL-E 2 → Stability → Placeholder"]
+    SUP <--> MEM[("Checkpointer<br/>Memory / SQLite")]
+    GW -. optional .-> LS["LangSmith traces"]
 ```
 
-The Query Handler produces a **plan** (an ordered subset of agents). After every node, the router function
-`next_step` picks the next unfinished agent, so a single graph handles every workflow: research-only,
-blog-only, image-only, refinements and full campaigns. See [docs/architecture.md](docs/architecture.md) and the
-[technical design](docs/technical_design.md).
+Each agent box is its own **LangGraph subgraph**; the Query Handler writes a **plan** and the router function
+`next_step` runs only the planned agents, in order, so one graph handles research-only, single-format, refinement and
+full-campaign requests. Full diagrams (system context, containers, components, every agent subgraph, the LLM retry
+and fallback path, request sequences, deployment) are in [docs/architecture.md](docs/architecture.md); the reasoning
+behind the main choices is in the [architecture decision records](docs/adr/README.md).
 
 ### Project structure
 
@@ -90,7 +89,7 @@ contentblitz/
 ├── scripts/benchmark.py     # latency / cost / quality per provider configuration
 ├── tests/{unit,integration,e2e}/
 ├── config/{services,development,production,test}.yaml
-├── docs/                    # architecture, API, deployment, technical design, service comparison, demo script, benchmarks/
+├── docs/                    # architecture, adr/, API, deployment, technical design, service comparison, demo script, benchmarks/, diagrams/
 ├── Dockerfile  docker-compose.yml  Makefile  requirements*.txt  .env.example
 └── .github/workflows/ci.yml
 ```
@@ -224,7 +223,8 @@ the live OpenAPI docs are at http://localhost:8000/docs.
 
 ## 📚 Documentation
 
-- [Architecture](docs/architecture.md): components, agent subgraphs, data flow, state model, sequence diagrams
+- [Architecture](docs/architecture.md): system context, containers, components, supervising graph, every agent subgraph, LLM fallback path, request flows, deployment, quality attributes
+- [Architecture decision records](docs/adr/README.md): why LangGraph subgraphs + LangChain, React + FastAPI/SSE, the retry/fallback strategy, fact-checking and memory
 - [Technical design](docs/technical_design.md): decisions, trade-offs, retry/fallback patterns, fact-checking, quality pipeline, scalability
 - [API documentation](docs/api_documentation.md): HTTP API, engine, every agent's subgraph and inputs/outputs, LLM gateway
 - [Service comparison](docs/service_comparison.md): providers, cost-benefit, benchmark method and results, recommendations by budget
