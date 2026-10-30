@@ -1,4 +1,4 @@
-.PHONY: install dev ui api web demo test test-ui cov cli docker lint bench bench-live
+.PHONY: install dev ui api web demo test test-ui cov cli docker lint bench bench-live diagrams
 
 install:        ## Python + frontend dependencies
 	pip install -r requirements.txt
@@ -26,6 +26,8 @@ bench:          ## Offline benchmark -> docs/benchmarks/offline-mock.md
 	python -m scripts.benchmark --mock
 bench-live:     ## Benchmark with your keys: make bench-live LABEL=balanced ARGS="--llm openai"
 	python -m scripts.benchmark --label $(or $(LABEL),live) $(ARGS)
+diagrams:       ## Render Mermaid diagrams in README/architecture.md to docs/diagrams/*.svg
+	python -m scripts.render_diagrams
 docker:
 	docker compose up --build
 lint:
