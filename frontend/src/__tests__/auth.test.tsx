@@ -21,16 +21,17 @@ describe("AuthScreen", () => {
     );
     const signup = vi.spyOn(api, "signupStart").mockResolvedValue(sent("signup"));
     render(<AuthScreen onSignedIn={vi.fn()} />);
-    expect(screen.getByRole("dialog", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("ContentBlitz, AI that");
+    expect(screen.getByText("Log in or create an account")).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Email"), "ana@example.com");
-    await userEvent.click(screen.getByRole("button", { name: "Send sign-in code" }));
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("isn't registered");
 
     await userEvent.click(screen.getByRole("button", { name: "Sign up with this email" }));
     expect(screen.getByRole("heading", { name: "Create your account" })).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toHaveValue("ana@example.com"); // kept for sign-up
     await userEvent.type(screen.getByLabelText("Your name"), "Ana Lopez");
-    await userEvent.click(screen.getByRole("button", { name: "Send verification code" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create account" }));
     expect(signup).toHaveBeenCalledWith("ana@example.com", "Ana Lopez");
     expect(await screen.findByRole("heading", { name: "Check your email" })).toBeInTheDocument();
     expect(screen.getByText(/Thanks, Ana/)).toBeInTheDocument();
@@ -66,9 +67,9 @@ describe("AuthScreen", () => {
     render(<AuthScreen onSignedIn={vi.fn()} initialMode="signup" />);
     await userEvent.type(screen.getByLabelText("Your name"), "Ana");
     await userEvent.type(screen.getByLabelText("Email"), "ana@example.com");
-    await userEvent.click(screen.getByRole("button", { name: "Send verification code" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create account" }));
     await userEvent.click(await screen.findByRole("button", { name: "Log in instead" }));
-    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByText("Log in or create an account")).toBeInTheDocument();
   });
 });
 

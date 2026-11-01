@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { ChatMessage, ImageAsset } from "../types";
+import { AgentObject, BrandMark, Icon, type AgentKey } from "./Art";
 import { Markdown } from "./Markdown";
+
+const EXAMPLE_AGENT: AgentKey[] = ["research", "blog", "linkedin", "image"];
 
 export const EXAMPLES = [
   "Research the latest trends in AI-powered customer service",
@@ -55,12 +58,14 @@ export function Chat({ messages, running, pending, error, image, onSend, userNam
       <div className="chat__log" role="log" aria-live="polite">
         {messages.length === 0 && !pending && (
           <div className="chat__empty">
-            <h2>{userName ? `What are we making today, ${userName}?` : "What are we making today?"}</h2>
+            <BrandMark size={52} className="chat__empty-mark" />
+            <h2>{userName ? `Hi ${userName}, what are we making today?` : "What are we making today?"}</h2>
             <p>Ask for research, a blog post, a LinkedIn post or an image. Follow-ups like "make it shorter" edit the last piece.</p>
             <div className="examples">
-              {EXAMPLES.map((ex) => (
+              {EXAMPLES.map((ex, i) => (
                 <button key={ex} type="button" className="example" onClick={() => onSend(ex)} disabled={running}>
-                  {ex}
+                  <span className="example__obj"><AgentObject agent={EXAMPLE_AGENT[i]} size={34} /></span>
+                  <span>{ex}</span>
                 </button>
               ))}
             </div>
@@ -68,18 +73,21 @@ export function Chat({ messages, running, pending, error, image, onSend, userNam
         )}
         {messages.map((m, i) => (
           <article key={i} className={`msg msg--${m.role}`}>
-            {m.role === "user" ? <p>{m.content}</p> : <Markdown>{m.content}</Markdown>}
+            {m.role === "assistant" && (
+              <span className="msg__avatar" aria-hidden="true"><BrandMark size={18} /></span>
+            )}
+            {m.role === "user" ? <p>{m.content}</p> : <Markdown className="md msg__body">{m.content}</Markdown>}
             {m.role === "assistant" && (
               <div className="msg__tools">
                 {m.agents && m.agents.length > 0 && <span className="msg__agents">{m.agents.join(", ")}</span>}
                 <button
                   type="button"
-                  className="linkish small"
+                  className="chip-btn"
                   onClick={async () => {
                     if (await copyText(m.content)) onCopied?.();
                   }}
                 >
-                  Copy reply
+                  <Icon.Copy /> Copy reply
                 </button>
               </div>
             )}
@@ -95,6 +103,7 @@ export function Chat({ messages, running, pending, error, image, onSend, userNam
         )}
         {running && (
           <p className="chat__working">
+            <span className="msg__avatar msg__avatar--busy" aria-hidden="true"><BrandMark size={18} /></span>
             <span className="dots" aria-hidden="true"><i /><i /><i /></span>
             The agents are working. Progress shows in the pipeline above.
           </p>
@@ -112,15 +121,23 @@ export function Chat({ messages, running, pending, error, image, onSend, userNam
         </label>
         <textarea
           id="composer-input"
-          rows={2}
+          rows={1}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKey}
-          placeholder="Ask for research, a blog post, a LinkedIn post, an image… or refine the last piece"
+          placeholder="Ask ContentBlitz to research, write a blog or LinkedIn post, make an image…"
         />
-        <button type="submit" className="btn btn--primary" disabled={running || !draft.trim()}>
-          {running ? "Working…" : "Send"}
-        </button>
+        <div className="composer__bar">
+          <span className="composer__hint">Shift + Enter adds a new line</span>
+          <button
+            type="submit"
+            className="send-btn"
+            aria-label={running ? "Working…" : "Send"}
+            disabled={running || !draft.trim()}
+          >
+            {running ? <span className="spinner" aria-hidden="true" /> : <Icon.ArrowUp />}
+          </button>
+        </div>
       </form>
     </section>
   );

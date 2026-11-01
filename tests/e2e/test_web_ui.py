@@ -66,7 +66,7 @@ def _new_page(browser, base_url, width=1280, height=900):
     # Fonts come from Google; block them so tests never depend on the network.
     pg.route("**/fonts.{googleapis,gstatic}.com/**", lambda r: r.abort())
     pg.goto(base_url)
-    pg.wait_for_selector(".auth__card")
+    pg.wait_for_selector(".auth__form")
     return ctx, pg
 
 
@@ -79,7 +79,7 @@ def sign_up(pg, email, name):
     pg.get_by_role("button", name="Sign up", exact=True).click()
     pg.get_by_label("Your name").fill(name)
     pg.get_by_label("Email").fill(email)
-    pg.get_by_role("button", name="Send verification code").click()
+    pg.get_by_role("button", name="Create account").click()
     _enter_code(pg)
     pg.wait_for_selector(".chat__empty")
 
@@ -98,16 +98,17 @@ def page(browser, base_url):
 def test_login_rejects_unregistered_email_then_signup_and_login_with_codes(browser, base_url):
     expect = playwright_api.expect
     ctx, pg = _new_page(browser, base_url)
-    card = pg.get_by_role("dialog", name="Sign in")
-    box = card.bounding_box()
+    box = pg.locator(".auth__form").bounding_box()
     assert abs((box["x"] + box["width"] / 2) - 640) < 4  # centred horizontally
+    assert 200 < box["y"] + box["height"] / 2 < 700       # and vertically in the first screen
+    playwright_api.expect(pg.get_by_text("Log in or create an account")).to_be_visible()
 
     pg.get_by_label("Email").fill("newbie@example.com")
-    pg.get_by_role("button", name="Send sign-in code").click()
+    pg.get_by_role("button", name="Continue").click()
     expect(pg.get_by_role("alert")).to_contain_text("newbie@example.com isn't registered")
     pg.get_by_role("button", name="Sign up with this email").click()
     pg.get_by_label("Your name").fill("Nia Newbie")
-    pg.get_by_role("button", name="Send verification code").click()
+    pg.get_by_role("button", name="Create account").click()
     expect(pg.get_by_role("heading", name="Check your email")).to_be_visible()
     _enter_code(pg)
     expect(pg.locator(".account__name")).to_have_text("Nia Newbie")
@@ -115,7 +116,7 @@ def test_login_rejects_unregistered_email_then_signup_and_login_with_codes(brows
 
     pg.get_by_role("button", name="Sign out").click()
     pg.get_by_label("Email").fill("newbie@example.com")
-    pg.get_by_role("button", name="Send sign-in code").click()
+    pg.get_by_role("button", name="Continue").click()
     _enter_code(pg)
     expect(pg.locator(".account__email")).to_have_text("newbie@example.com")
     ctx.close()

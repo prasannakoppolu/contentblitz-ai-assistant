@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from "react";
 import { ApiError, api } from "../api";
 import type { CodeSent, User } from "../types";
+import { AgentObject, BrandMark, Icon, type AgentKey } from "./Art";
+
+export { BrandMark };
 
 type Mode = "login" | "signup";
 
@@ -9,7 +12,50 @@ interface Props {
   initialMode?: Mode;
 }
 
-/** Centered sign-in / sign-up card. Both paths confirm the email with a 6-digit code. */
+/** What the headline cycles through: one line per agent, each with its object. */
+const ROTATION: { agent: AgentKey; text: string }[] = [
+  { agent: "research", text: "researches your market" },
+  { agent: "blog", text: "writes your SEO blog" },
+  { agent: "linkedin", text: "drafts your LinkedIn post" },
+  { agent: "image", text: "designs your visuals" },
+  { agent: "strategist", text: "plans your content" },
+];
+
+function usePrefersReducedMotion() {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!mq) return;
+    setReduce(mq.matches);
+    const on = () => setReduce(mq.matches);
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, []);
+  return reduce;
+}
+
+function RotatingLine() {
+  const reduce = usePrefersReducedMotion();
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (reduce) return;
+    const t = setInterval(() => setI((n) => (n + 1) % ROTATION.length), 2600);
+    return () => clearInterval(t);
+  }, [reduce]);
+  const item = ROTATION[i];
+  return (
+    <span className="rotator" aria-hidden="true">
+      <span key={item.text} className="rotator__item">
+        {item.text}
+        <span className="rotator__obj">
+          <AgentObject agent={item.agent} size={52} />
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/** The sign-in landing page: centred hero with the email form, plus a short "learn more" section. */
 export function AuthScreen({ onSignedIn, initialMode = "login" }: Props) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
@@ -17,6 +63,7 @@ export function AuthScreen({ onSignedIn, initialMode = "login" }: Props) {
   const [sent, setSent] = useState<CodeSent | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; code?: string } | null>(null);
+  const more = useRef<HTMLElement>(null);
 
   const switchTo = (m: Mode) => {
     setMode(m);
@@ -39,12 +86,16 @@ export function AuthScreen({ onSignedIn, initialMode = "login" }: Props) {
   };
 
   return (
-    <main className="auth">
-      <div className="auth__card" role="dialog" aria-modal="false" aria-labelledby="auth-title">
-        <p className="auth__brand">
-          <BrandMark />
+    <div className="landing">
+      <header className="landing__bar">
+        <span className="landing__brand">
+          <BrandMark size={26} />
           ContentBlitz
-        </p>
+        </span>
+      </header>
+
+      <main className="hero">
+        <BrandMark size={64} className="hero__mark" />
         {sent ? (
           <CodeStep
             sent={sent}
@@ -54,84 +105,130 @@ export function AuthScreen({ onSignedIn, initialMode = "login" }: Props) {
             onSignedIn={onSignedIn}
           />
         ) : (
-          <form className="auth__form" onSubmit={requestCode} noValidate>
-            <h1 id="auth-title">{mode === "login" ? "Sign in" : "Create your account"}</h1>
-            <p className="auth__lede">
-              {mode === "login"
-                ? "Enter your work email and we'll send you a sign-in code."
-                : "Tell us who you are. We'll email a code to confirm the address."}
-            </p>
-            {mode === "signup" && (
-              <label className="field">
-                <span>Your name</span>
+          <>
+            {mode === "login" ? (
+              <h1 className="hero__title">
+                <span className="sr-only">ContentBlitz, AI that researches, writes and designs your content</span>
+                <span aria-hidden="true">
+                  ContentBlitz, AI that
+                  <br />
+                  <RotatingLine />
+                </span>
+              </h1>
+            ) : (
+              <h1 className="hero__title hero__title--small">Create your account</h1>
+            )}
+            <form className="auth__form" onSubmit={requestCode} noValidate>
+              <h2 id="auth-title" className="auth__lede">
+                {mode === "login" ? "Log in or create an account" : "Tell us your name. We'll email you a code to confirm."}
+              </h2>
+              {mode === "signup" && (
+                <label className="pill-field">
+                  <span className="sr-only">Your name</span>
+                  <input
+                    autoFocus
+                    autoComplete="name"
+                    placeholder="Your name"
+                    value={name}
+                    maxLength={80}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </label>
+              )}
+              <label className="pill-field">
+                <span className="sr-only">Email</span>
                 <input
-                  autoFocus
-                  autoComplete="name"
-                  value={name}
-                  maxLength={80}
-                  onChange={(e) => setName(e.target.value)}
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="Work email address"
+                  autoFocus={mode === "login"}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "auth-error" : undefined}
                   required
                 />
               </label>
-            )}
-            <label className="field">
-              <span>Email</span>
-              <input
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                autoFocus={mode === "login"}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                aria-invalid={!!error}
-                aria-describedby={error ? "auth-error" : undefined}
-                required
-              />
-            </label>
-            {error && (
-              <div id="auth-error" className="auth__error" role="alert">
-                <p>{error.text}</p>
-                {error.code === "not_registered" && (
-                  <button type="button" className="linkish" onClick={() => switchTo("signup")}>
-                    Sign up with this email
-                  </button>
-                )}
-                {error.code === "already_registered" && (
-                  <button type="button" className="linkish" onClick={() => switchTo("login")}>
-                    Log in instead
-                  </button>
-                )}
-              </div>
-            )}
-            <button
-              type="submit"
-              className="btn btn--primary btn--block"
-              disabled={busy || !email.trim() || (mode === "signup" && !name.trim())}
-            >
-              {busy ? "Sending code…" : mode === "login" ? "Send sign-in code" : "Send verification code"}
-            </button>
-            <p className="auth__switch">
-              {mode === "login" ? (
-                <>
-                  New to ContentBlitz?{" "}
-                  <button type="button" className="linkish" onClick={() => switchTo("signup")}>
-                    Sign up
-                  </button>
-                </>
-              ) : (
-                <>
-                  Already have an account?{" "}
-                  <button type="button" className="linkish" onClick={() => switchTo("login")}>
-                    Log in
-                  </button>
-                </>
+              {error && (
+                <div id="auth-error" className="auth__error" role="alert">
+                  <p>{error.text}</p>
+                  {error.code === "not_registered" && (
+                    <button type="button" className="linkish linkish--accent" onClick={() => switchTo("signup")}>
+                      Sign up with this email
+                    </button>
+                  )}
+                  {error.code === "already_registered" && (
+                    <button type="button" className="linkish linkish--accent" onClick={() => switchTo("login")}>
+                      Log in instead
+                    </button>
+                  )}
+                </div>
               )}
-            </p>
-          </form>
+              <button
+                type="submit"
+                className="btn btn--primary btn--pill btn--block"
+                disabled={busy || !email.trim() || (mode === "signup" && !name.trim())}
+              >
+                {busy ? "Sending code…" : mode === "login" ? "Continue" : "Create account"}
+              </button>
+              <p className="auth__note">
+                {mode === "login" ? (
+                  <>
+                    We'll email you a 6-digit code. New here?{" "}
+                    <button type="button" className="linkish linkish--accent" onClick={() => switchTo("signup")}>
+                      Sign up
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{" "}
+                    <button type="button" className="linkish linkish--accent" onClick={() => switchTo("login")}>
+                      Log in
+                    </button>
+                  </>
+                )}
+              </p>
+            </form>
+          </>
         )}
-      </div>
-      <p className="auth__foot">Research, blog posts, LinkedIn posts and visuals from one conversation.</p>
-    </main>
+        <button
+          type="button"
+          className="float-pill hero__more"
+          onClick={() => more.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        >
+          Learn more <Icon.ArrowDown />
+        </button>
+      </main>
+
+      <section ref={more} className="tour" aria-labelledby="tour-title">
+        <div className="tour__stage" aria-hidden="true">
+          <span className="tour__center"><BrandMark size={40} /></span>
+          {(["query_handler", "research", "strategist", "blog", "linkedin", "image"] as AgentKey[]).map((a, i) => (
+            <span key={a} className={`tour__obj tour__obj--${i + 1}`}>
+              <AgentObject agent={a} size={72} />
+            </span>
+          ))}
+        </div>
+        <h2 id="tour-title" className="tour__title">Six agents, one conversation</h2>
+        <div className="tour__points">
+          <div>
+            <h3>Research you can check</h3>
+            <p>Every finding cites its source, sources get a credibility rating, and figures are checked against them.</p>
+          </div>
+          <div>
+            <h3>Writing that ranks and reads well</h3>
+            <p>SEO blog posts and LinkedIn posts are scored for quality and rewritten automatically when they fall short.</p>
+          </div>
+          <div>
+            <h3>Always in your brand voice</h3>
+            <p>Set your tone and phrases to avoid, or paste a few samples and ContentBlitz learns how you write.</p>
+          </div>
+        </div>
+        <p className="tour__foot">ContentBlitz · Research, blog posts, LinkedIn posts and visuals from one conversation.</p>
+      </section>
+    </div>
   );
 }
 
@@ -202,7 +299,9 @@ function CodeStep({ sent, name, onBack, onResend, onSignedIn }: {
 
   return (
     <form className="auth__form" onSubmit={(e) => submit(code, e)}>
-      <h1 id="auth-title">Check your email</h1>
+      <h1 id="auth-title" className="hero__title hero__title--small">
+        <Icon.Mail size={30} className="hero__title-icon" /> Check your email
+      </h1>
       <p className="auth__lede">
         {sent.purpose === "signup" && name ? `Thanks, ${name.split(" ")[0]}. ` : ""}
         We sent a 6-digit code to <strong>{sent.email}</strong>. It expires in {Math.round(sent.expires_in / 60)} minutes.
@@ -251,15 +350,15 @@ function CodeStep({ sent, name, onBack, onResend, onSignedIn }: {
           {error}
         </p>
       )}
-      <button type="submit" className="btn btn--primary btn--block" disabled={busy || code.length !== 6}>
+      <button type="submit" className="btn btn--primary btn--pill btn--block" disabled={busy || code.length !== 6}>
         {busy ? "Checking…" : sent.purpose === "signup" ? "Verify and create account" : "Verify and sign in"}
       </button>
-      <p className="auth__switch">
-        <button type="button" className="linkish" onClick={onResend} disabled={wait > 0}>
+      <p className="auth__note">
+        <button type="button" className="linkish linkish--accent" onClick={onResend} disabled={wait > 0}>
           {wait > 0 ? `Send a new code in ${wait}s` : "Send a new code"}
         </button>
         <span aria-hidden="true"> or </span>
-        <button type="button" className="linkish" onClick={onBack}>
+        <button type="button" className="linkish linkish--accent" onClick={onBack}>
           use a different email
         </button>
       </p>
@@ -267,11 +366,3 @@ function CodeStep({ sent, name, onBack, onResend, onSignedIn }: {
   );
 }
 
-export function BrandMark({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className="brandmark">
-      <rect width="32" height="32" rx="7" fill="var(--ink)" />
-      <path d="M18 4 8 18h7l-2 10 11-15h-7z" fill="var(--marker)" />
-    </svg>
-  );
-}

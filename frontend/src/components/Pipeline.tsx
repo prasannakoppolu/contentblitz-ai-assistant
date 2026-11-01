@@ -1,4 +1,5 @@
 import type { TraceEntry } from "../types";
+import { AgentObject, Icon, type AgentKey } from "./Art";
 
 export const STATIONS: { id: string; label: string; does: string }[] = [
   { id: "query_handler", label: "Brief", does: "Reads your request and plans the run" },
@@ -32,7 +33,10 @@ export function Pipeline({ statuses, details }: { statuses: Record<string, Stati
         const st = statuses[s.id] ?? "idle";
         return (
           <li key={s.id} className={`station station--${st}`} aria-current={st === "active" ? "step" : undefined}>
-            <span className="station__num">{i + 1}</span>
+            <span className="station__icon">
+              <AgentObject agent={s.id as AgentKey} size={30} />
+              <span className="station__num">{st === "ok" ? <Icon.Check size={10} /> : st === "error" ? "!" : i + 1}</span>
+            </span>
             <span className="station__body">
               <span className="station__label">{s.label}</span>
               <span className="station__detail" title={details[s.id] || s.does}>
