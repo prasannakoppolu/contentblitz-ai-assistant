@@ -192,7 +192,7 @@ function ImageView({ image }: { image: ImageAsset }) {
     <div className="editor">
       {src && <img className="hero-image" src={src} alt={image.alt_text} />}
       {image.provider === "placeholder" && (
-        <p className="notice">This is the offline placeholder. Add an OpenAI or Stability key in Settings to generate AI images.</p>
+        <p className="notice">The image service is offline right now, so this is a placeholder. Ask again later for a generated image.</p>
       )}
       <div className="stats">
         <Stat value={image.provider} label="provider" />

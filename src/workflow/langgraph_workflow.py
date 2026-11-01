@@ -149,11 +149,11 @@ def compose_response(state: ContentState, produced: List[str], errors: List[Dict
                      f"{li['quality']['score']}/100):\n\n{quoted}")
     img = state.get("image") or {}
     if "image" in produced and img:
-        note = " (offline placeholder; add an OpenAI/Stability key for AI images)" if img.get("provider") == "placeholder" else ""
+        note = " (offline placeholder: the AI image service isn't available right now)" if img.get("provider") == "placeholder" else ""
         parts.append(f"🎨 **Image generated** with {img['provider']}{note}.\n- Enhanced prompt: _{img['enhanced_prompt'][:300]}_")
     for e in errors:
         parts.append(f"⚠️ The **{e['agent']}** agent hit a problem and was skipped: {e['error'][:200]}. "
-                     "Other content was still produced; try again or switch providers in Settings.")
+                     "Other content was still produced; try again in a moment.")
     if not parts:
         parts.append("I couldn't produce content for that request. Try asking for research, a blog post, a LinkedIn post or an image.")
     nxt = _next_suggestion(produced)

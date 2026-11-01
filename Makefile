@@ -8,12 +8,13 @@ dev:            ## Dev/test tooling (incl. Playwright browser)
 	cd frontend && npm ci
 ui:             ## Build the React app into frontend/dist
 	cd frontend && npm run build
-api:            ## API with auto-reload on :8000 (pair with `make web`)
-	uvicorn src.api.server:app --reload --port 8000
+api:            ## API with auto-reload on :8000 (pair with `make web`); shows sign-in codes on screen
+	CONTENTBLITZ_AUTH_DEV_CODES=$(or $(CONTENTBLITZ_AUTH_DEV_CODES),1) uvicorn src.api.server:app --reload --port 8000
 web:            ## Vite dev server on :5173 with hot reload (proxies /api to :8000)
 	cd frontend && npm run dev
-demo: ui        ## Build the UI and serve everything offline on :8000
-	CONTENTBLITZ_MOCK=1 uvicorn src.api.server:app --port 8000
+demo: ui        ## Build the UI and serve everything offline on :8000 (codes on screen; admin@example.com is admin)
+	CONTENTBLITZ_MOCK=1 CONTENTBLITZ_AUTH_DEV_CODES=1 ADMIN_EMAILS=$(or $(ADMIN_EMAILS),admin@example.com) \
+	  uvicorn src.api.server:app --port 8000
 test:           ## Python tests (browser e2e runs when frontend/dist exists)
 	pytest
 test-ui:        ## Frontend unit tests + typecheck

@@ -16,9 +16,20 @@ interface Props {
   error: string | null;
   image?: ImageAsset | null;
   onSend: (message: string) => void;
+  userName?: string;
+  onCopied?: () => void;
 }
 
-export function Chat({ messages, running, pending, error, image, onSend }: Props) {
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function Chat({ messages, running, pending, error, image, onSend, userName, onCopied }: Props) {
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const lastImageIdx = messages.map((m) => m.role === "assistant" && m.agents?.includes("image")).lastIndexOf(true);
@@ -44,7 +55,7 @@ export function Chat({ messages, running, pending, error, image, onSend }: Props
       <div className="chat__log" role="log" aria-live="polite">
         {messages.length === 0 && !pending && (
           <div className="chat__empty">
-            <h2>What are we making today?</h2>
+            <h2>{userName ? `What are we making today, ${userName}?` : "What are we making today?"}</h2>
             <p>Ask for research, a blog post, a LinkedIn post or an image. Follow-ups like "make it shorter" edit the last piece.</p>
             <div className="examples">
               {EXAMPLES.map((ex) => (
@@ -58,6 +69,20 @@ export function Chat({ messages, running, pending, error, image, onSend }: Props
         {messages.map((m, i) => (
           <article key={i} className={`msg msg--${m.role}`}>
             {m.role === "user" ? <p>{m.content}</p> : <Markdown>{m.content}</Markdown>}
+            {m.role === "assistant" && (
+              <div className="msg__tools">
+                {m.agents && m.agents.length > 0 && <span className="msg__agents">{m.agents.join(", ")}</span>}
+                <button
+                  type="button"
+                  className="linkish small"
+                  onClick={async () => {
+                    if (await copyText(m.content)) onCopied?.();
+                  }}
+                >
+                  Copy reply
+                </button>
+              </div>
+            )}
             {i === lastImageIdx && image?.src && (
               <img className="msg__image" src={image.src} alt={image.alt_text} loading="lazy" />
             )}
@@ -68,7 +93,12 @@ export function Chat({ messages, running, pending, error, image, onSend }: Props
             <p>{pending}</p>
           </article>
         )}
-        {running && <p className="chat__working">The agents are working. Progress shows in the pipeline above.</p>}
+        {running && (
+          <p className="chat__working">
+            <span className="dots" aria-hidden="true"><i /><i /><i /></span>
+            The agents are working. Progress shows in the pipeline above.
+          </p>
+        )}
         {error && (
           <p className="chat__error" role="alert">
             {error}

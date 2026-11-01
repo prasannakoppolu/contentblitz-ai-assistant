@@ -155,22 +155,44 @@ export interface ConversationState {
 }
 
 export interface AppConfig {
-  detected_keys: string[];
-  default_demo_mode: boolean;
-  quality_threshold: number;
-  fallback_chains: Record<string, string[]>;
   brand_voice: BrandVoice;
-  key_providers: string[];
   env: string;
-  tracing?: boolean;
+  email_delivery: "email" | "console";
 }
 
-export interface ClientSettings {
-  demo_mode: boolean;
-  api_keys: Record<string, string>;
-  llm_primary: "openai" | "anthropic" | "gemini";
-  research_primary: "serpapi" | "perplexity" | "tavily";
-  quality_threshold: number;
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  is_admin: boolean;
+  created_at?: number;
+}
+
+export interface CodeSent {
+  sent: boolean;
+  email: string;
+  purpose: "login" | "signup";
+  delivery: "email" | "console";
+  expires_in: number;
+  resend_after: number;
+  dev_code?: string;
+}
+
+export interface ThreadSummary {
+  thread_id: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export type LLMProvider = "openai" | "anthropic" | "gemini";
+export type ResearchProvider = "serpapi" | "perplexity" | "tavily";
+
+export interface ServerSettings {
+  demo_mode: boolean | null;
+  llm_primary: LLMProvider | null;
+  research_primary: ResearchProvider | null;
+  quality_threshold: number | null;
 }
 
 export interface Usage {
@@ -183,8 +205,22 @@ export interface Usage {
   offline: boolean;
 }
 
+export interface AdminOverview {
+  settings: ServerSettings;
+  effective: { demo_mode: boolean; llm_primary: string | null; research_primary: string | null; quality_threshold: number };
+  detected_keys: string[];
+  key_providers: string[];
+  fallback_chains: Record<string, string[]>;
+  usage: Usage;
+  tracing: boolean;
+  email_delivery: "email" | "console";
+  env: string;
+  users: { email: string; name: string; created_at: number; last_login: number | null; conversations: number; is_admin: boolean }[];
+  totals: { users: number; conversations: number };
+}
+
 export type StreamEvent =
-  | { event: "start"; data: { thread_id: string; providers: Record<string, string[]>; offline: boolean } }
+  | { event: "start"; data: { thread_id: string } }
   | { event: "node"; data: { node: string; trace: TraceEntry | null; plan?: string[]; topic?: string } }
   | { event: "done"; data: ConversationState }
   | { event: "error"; data: { message: string } };

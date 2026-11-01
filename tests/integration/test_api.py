@@ -1,4 +1,6 @@
-"""FastAPI backend: SSE chat, state, edits, brand voice, exports, images, security."""
+"""FastAPI backend: SSE chat, state, edits, brand voice, exports, images, security.
+
+Every client here is signed in (see ``signed_in`` in tests/integration/auth_helpers.py)."""
 from __future__ import annotations
 
 import json
@@ -8,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from src.api.schemas import ClientSettings
 from src.api.server import EngineRegistry, create_app
+from tests.integration.auth_helpers import make_auth, signed_in
 
 MOCK = {"demo_mode": True}
 
@@ -15,8 +18,9 @@ MOCK = {"demo_mode": True}
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTENTBLITZ_OUTPUT_DIR", str(tmp_path))
-    app = create_app(base_overrides={"app": {"use_mock": True, "max_retries": 0}}, env="test", serve_frontend=False)
-    return TestClient(app)
+    app = create_app(base_overrides={"app": {"use_mock": True, "max_retries": 0}}, env="test", serve_frontend=False,
+                     auth=make_auth())
+    return signed_in(TestClient(app))
 
 
 def parse_sse(text: str):
@@ -27,8 +31,8 @@ def parse_sse(text: str):
     return events
 
 
-def chat(client, tid, message, settings=None):
-    r = client.post(f"/api/threads/{tid}/chat", json={"message": message, "settings": settings or MOCK})
+def chat(client, tid, message):
+    r = client.post(f"/api/threads/{tid}/chat", json={"message": message})
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
     return parse_sse(r.text)
 
@@ -36,9 +40,9 @@ def chat(client, tid, message, settings=None):
 def test_health_and_config(client):
     assert client.get("/api/health").json()["status"] == "ok"
     cfg = client.get("/api/config").json()
-    assert cfg["default_demo_mode"] is True
     assert cfg["brand_voice"]["name"] == "ContentBlitz"
-    assert "openai" in cfg["key_providers"]
+    # Customers never see provider keys, offline mode or usage: those live on /api/admin.
+    assert not {"key_providers", "detected_keys", "default_demo_mode", "tracing"} & set(cfg)
 
 
 def test_chat_streams_agent_progress_and_final_state(client):
@@ -60,7 +64,11 @@ def test_state_persists_and_followups_use_memory(client):
     assert [d["node"] for e, d in events if e == "node"] == ["query_handler", "blog", "finalize"]
     state = client.get("/api/threads/t1/state").json()
     assert state["topic"] == "sustainable packaging" and len(state["messages"]) == 4
-    assert client.get("/api/threads/unknown/state").json()["messages"] == []
+    assert client.get("/api/threads/unknown/state").status_code == 404
+    fresh = client.post("/api/threads").json()["thread_id"]
+    assert client.get(f"/api/threads/{fresh}/state").json()["messages"] == []
+    listed = client.get("/api/threads").json()["threads"]
+    assert {t["thread_id"]: t["title"] for t in listed} == {fresh: "", "t1": "Research sustainable packaging"}
 
 
 def test_blog_and_linkedin_edits_rescore(client):
@@ -121,19 +129,13 @@ def test_images_served_and_traversal_blocked(client):
     assert client.get("/api/images/missing.png").status_code == 404
 
 
-def test_usage_reflects_settings(client):
-    chat(client, "u", "Research zero-party data")
-    u = client.post("/api/usage", json=MOCK).json()
-    assert u["offline"] is True and u["calls"] > 0 and u["providers"]["llm"] == ["mock"]
-
-
 def test_chat_validation(client):
     assert client.post("/api/threads/v/chat", json={"message": ""}).status_code == 422
-    assert client.post("/api/threads/v/chat", json={"message": "hi", "settings": {"llm_primary": "bogus"}}).status_code == 422
+    assert client.post("/api/threads/v/chat", json={"message": "x" * 4001}).status_code == 422
 
 
 def test_chat_stream_reports_errors(client, monkeypatch):
-    eng = client.app.state.registry.get(ClientSettings(**MOCK))
+    eng = client.app.state.registry.get(ClientSettings(**MOCK))  # the engine an offline server uses
 
     def boom(*a, **k):
         raise RuntimeError("graph exploded")
@@ -141,7 +143,8 @@ def test_chat_stream_reports_errors(client, monkeypatch):
 
     monkeypatch.setattr(eng, "stream", boom)
     events = chat(client, "z", "Research anything")
-    assert events[-1][0] == "error" and "graph exploded" in events[-1][1]["message"]
+    assert events[-1][0] == "error" and "went wrong" in events[-1][1]["message"]
+    assert "graph exploded" not in events[-1][1]["message"]  # internals stay in the server log
 
 
 def test_registry_builds_engine_per_settings_and_shares_memory(tmp_path, monkeypatch):
@@ -165,7 +168,7 @@ def test_spa_fallback_serves_index(tmp_path, monkeypatch):
     (dist / "index.html").write_text("<div id=root></div>")
     (dist / "assets" / "app.js").write_text("console.log(1)")
     monkeypatch.setattr(server, "FRONTEND_DIST", dist)
-    c = TestClient(server.create_app({"app": {"use_mock": True}}, env="test"))
+    c = TestClient(server.create_app({"app": {"use_mock": True}}, env="test", auth=make_auth()))
     assert c.get("/").text == "<div id=root></div>"
     assert c.get("/dashboard/blog").text == "<div id=root></div>"
     assert c.get("/assets/app.js").status_code == 200
@@ -177,9 +180,11 @@ def test_sqlite_memory_survives_restart(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTENTBLITZ_OUTPUT_DIR", str(tmp_path))
     monkeypatch.setenv("CONTENTBLITZ_MEMORY", "sqlite")
     monkeypatch.setenv("CONTENTBLITZ_MEMORY_PATH", str(tmp_path / "mem.sqlite"))
-    first = TestClient(create_app({"app": {"use_mock": True}}, env="test", serve_frontend=False))
+    auth = make_auth()
+    first = signed_in(TestClient(create_app({"app": {"use_mock": True}}, env="test", serve_frontend=False, auth=auth)))
     chat(first, "keep", "Research hybrid work")
-    restarted = TestClient(create_app({"app": {"use_mock": True}}, env="test", serve_frontend=False))
+    restarted = TestClient(create_app({"app": {"use_mock": True}}, env="test", serve_frontend=False, auth=auth))
+    restarted.cookies.update(first.cookies)
     assert restarted.get("/api/threads/keep/state").json()["topic"] == "hybrid work"
 
 

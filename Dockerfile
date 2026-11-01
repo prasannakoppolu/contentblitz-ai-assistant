@@ -10,7 +10,8 @@ RUN npm run build
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     CONTENTBLITZ_OUTPUT_DIR=/data/outputs \
-    CONTENTBLITZ_MEMORY=sqlite CONTENTBLITZ_MEMORY_PATH=/data/contentblitz_memory.sqlite
+    CONTENTBLITZ_MEMORY=sqlite CONTENTBLITZ_MEMORY_PATH=/data/contentblitz_memory.sqlite \
+    CONTENTBLITZ_AUTH_DB=/data/contentblitz_auth.sqlite CONTENTBLITZ_COOKIE_SECURE=0
 WORKDIR /app
 
 COPY requirements.txt .
