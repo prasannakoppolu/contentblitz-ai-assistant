@@ -1,62 +1,42 @@
-import { useCallback, useState } from "react";
-import type { ClientSettings } from "./types";
+/** Per-viewer conveniences kept in localStorage. Everything that matters lives on the server. */
 
-const PREFS_KEY = "contentblitz.prefs";
-const THREAD_KEY = "contentblitz.thread";
+const threadKey = (userId: number) => `contentblitz.thread.${userId}`;
 
-type Prefs = Omit<ClientSettings, "api_keys">;
-
-function readPrefs(): Partial<Prefs> {
+export function storedThread(userId: number): string | null {
   try {
-    return JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-export function storedThread(): string | null {
-  try {
-    return localStorage.getItem(THREAD_KEY);
+    return localStorage.getItem(threadKey(userId));
   } catch {
     return null;
   }
 }
 
-export function storeThread(tid: string): void {
+export function storeThread(userId: number, tid: string): void {
   try {
-    localStorage.setItem(THREAD_KEY, tid);
+    localStorage.setItem(threadKey(userId), tid);
   } catch {
-    /* storage unavailable: thread lives for this tab only */
+    /* storage unavailable: the thread lives for this tab only */
   }
 }
 
-/**
- * Provider preferences persist in localStorage; API keys are deliberately kept in
- * memory only, so they vanish when the tab closes.
- */
-export function useSettings(defaults: { demo_mode: boolean; quality_threshold: number }) {
-  const [settings, setSettings] = useState<ClientSettings>(() => ({
-    demo_mode: defaults.demo_mode,
-    llm_primary: "openai",
-    research_primary: "serpapi",
-    quality_threshold: defaults.quality_threshold,
-    ...readPrefs(),
-    api_keys: {},
-  }));
+export function forgetThread(userId: number): void {
+  try {
+    localStorage.removeItem(threadKey(userId));
+  } catch {
+    /* ignore */
+  }
+}
 
-  const update = useCallback((patch: Partial<ClientSettings>) => {
-    setSettings((prev) => {
-      const next = { ...prev, ...patch };
-      const { api_keys: _omit, ...prefs } = next;
-      void _omit;
-      try {
-        localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, []);
+/** "just now", "5 min ago", "yesterday", "12 Mar" for conversation lists. */
+export function relativeTime(epochSeconds: number, now: number = Date.now()): string {
+  const diff = Math.max(0, now / 1000 - epochSeconds);
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`;
+  if (diff < 172800) return "yesterday";
+  return new Date(epochSeconds * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
 
-  return [settings, update] as const;
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
 }

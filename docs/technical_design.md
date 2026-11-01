@@ -44,7 +44,7 @@ Images     ──► ProviderChain: DALL-E 3 ─fail─► DALL-E 2 ─fail─�
 - **Structured output:** routing, research analysis, briefs, keywords and hashtags use `with_structured_output`
   with Pydantic schemas; invalid output from one provider falls back to the next, then to agent-level defaults.
 - **Observability:** a LangChain callback records every attempt (provider, model, latency, tokens, cost) into the
-  `UsageTracker` (Settings panel, `POST /api/usage`); LangSmith traces every subgraph node and model call when
+  `UsageTracker` (admin dashboard, `GET /api/admin/overview`); LangSmith traces every subgraph node and model call when
   `LANGSMITH_TRACING=true`; `scripts/benchmark.py` measures latency, cost and quality per configuration.
 - **Model tiers:** `fast` for routing, keywords, meta, hashtags and image prompts; `premium` for long-form.
 
@@ -100,9 +100,20 @@ Ambiguous requests with a topic default to a research report; greetings and topi
 
 ## 7. Security
 
-- Keys come from env/.env on the server, or from the browser: typed into Settings, held in the tab's memory only
-  (not localStorage) and sent with each request. The server hashes the provider configuration to select an engine
-  and never logs or persists keys. Serve over HTTPS in production.
+- **Accounts** ([ADR-0006](adr/0006-email-otp-accounts-and-admin-dashboard.md)): passwordless sign-in with a 6-digit
+  email code. Codes are salted SHA-256 hashes, expire after 10 minutes, allow 5 wrong tries, and can be requested once
+  per 30 s / 5 times an hour per email; comparison is constant-time. Sign-up creates the account only after the code
+  is verified.
+- **Sessions**: random 256-bit tokens in an HttpOnly, `SameSite=Lax` cookie (`Secure` with
+  `CONTENTBLITZ_COOKIE_SECURE=1`), stored server-side as hashes, deleted on sign-out, 14-day expiry.
+- **Authorisation**: every route except health, config and `/api/auth/*` needs a session; conversations are owned
+  and return 404 to other accounts; `/api/admin/*` needs an email in `ADMIN_EMAILS`.
+- **Provider keys** come only from env/.env on the server and never reach the browser; the admin dashboard shows
+  which providers are configured, not the keys. The engine registry still hashes its configuration so keys never
+  appear as readable dictionary keys or in logs. Serve over HTTPS in production.
+- Chat stream errors send a generic message to the browser; details stay in the server log.
+- The login error says whether an email is registered (requested UX); per-email send limits keep this from being
+  used to spam inboxes.
 - The API strips server file paths from responses; images are served by filename with path-traversal checks.
 - CORS is limited to the Vite dev origins; production serves UI and API from one origin.
 - No user data in URLs except provider-required query params (SERP API key per their API).

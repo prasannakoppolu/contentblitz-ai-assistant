@@ -69,7 +69,7 @@ export function ResearchPanel({ state }: { state: ConversationState }) {
         </p>
       </header>
       {r.offline_demo && (
-        <p className="notice">These are offline demo sources for illustration. Add a SERP API, Perplexity or Tavily key for live research.</p>
+        <p className="notice">Live web search is offline right now, so these are sample sources for illustration. Check facts before publishing.</p>
       )}
       <div className="stats">
         <Stat value={r.sources.length} label="sources" />

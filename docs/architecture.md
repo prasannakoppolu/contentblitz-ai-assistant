@@ -13,7 +13,7 @@ state, deployment and quality attributes. The reasoning behind the major choices
 | 3 | [Backend components](#3-backend-components) | Modules inside the API server and their dependencies |
 | 4 | [Supervising graph](#4-supervising-graph) and [agent subgraphs](#5-agent-subgraphs) | How a request moves through the agents |
 | – | [LLM call path](#6-llm-call-path-retries-and-fallbacks) | How retries and provider fallbacks work |
-| – | [Request flows](#7-request-flows) | Chat streaming, human edits, a full campaign |
+| – | [Request flows](#7-request-flows) | Chat streaming, human edits, sign-in, a full campaign |
 | – | [State](#8-state-model) · [Deployment](#9-deployment) · [Quality attributes](#10-quality-attributes) | Memory, runtime topology, cross-cutting concerns |
 
 ---
@@ -22,7 +22,8 @@ state, deployment and quality attributes. The reasoning behind the major choices
 
 ```mermaid
 flowchart LR
-    user(["👤 Marketer / content creator<br/>(browser)"])
+    user(["👤 Marketer / content creator<br/>(browser, signed in)"])
+    admin(["🔑 Administrator<br/>(ADMIN_EMAILS, /admin)"])
     dev(["🛠️ Developer / evaluator<br/>(CLI, tests, benchmarks)"])
 
     subgraph cb ["ContentBlitz"]
@@ -44,8 +45,12 @@ flowchart LR
         stab["Stability AI"]
     end
     ls["LangSmith<br/>(optional tracing)"]
+    mail["Email provider<br/>(SMTP: sign-in codes)"]
 
-    user -- "chat, edit, export (HTTPS)" --> sys
+    user -- "sign in, chat, edit, export (HTTPS)" --> sys
+    admin -- "offline mode, provider priority,<br/>quality bar, usage, accounts" --> sys
+    sys -- "6-digit codes" --> mail
+    mail -. "inbox" .-> user
     dev -- "CLI / pytest / make bench" --> sys
     sys -- "prompts → completions,<br/>structured output" --> llm
     sys -- "search queries → results" --> search
@@ -54,7 +59,8 @@ flowchart LR
 ```
 
 Every external service is optional: with no keys, ContentBlitz runs on built-in offline providers (a LangChain mock
-chat model, mock search and a local image renderer), which is also how CI and the demo mode run.
+chat model, mock search and a local image renderer), and without SMTP sign-in codes go to the server log. That is
+also how CI and the demo mode run.
 
 ---
 
@@ -63,11 +69,11 @@ chat model, mock search and a local image renderer), which is also how CI and th
 ```mermaid
 flowchart TB
     subgraph browser ["Browser"]
-        spa["<b>React SPA</b><br/>TypeScript · Vite<br/>Chat · Content · Research · Export · Settings<br/><i>API keys held in tab memory only</i>"]
+        spa["<b>React SPA</b><br/>TypeScript · Vite<br/>Sign-in · Chat · Content · Research · Export · Admin<br/><i>session in an HttpOnly cookie</i>"]
     end
 
     subgraph server ["API server process (uvicorn :8000)"]
-        api["<b>FastAPI app</b><br/>REST + Server-Sent Events<br/>serves the built SPA"]
+        api["<b>FastAPI app</b><br/>REST + Server-Sent Events<br/>auth · ownership · serves the built SPA"]
         engine["<b>ContentBlitzEngine</b><br/>LangGraph runtime: supervising graph<br/>+ 6 agent subgraphs"]
         svc["<b>Services</b><br/>LLMGateway (LangChain) · search & image ProviderChains<br/>TTL cache · usage tracker"]
         api --> engine --> svc
@@ -76,7 +82,9 @@ flowchart TB
     subgraph storage ["Local storage (/data volume in Docker)"]
         mem[("Conversation memory<br/>LangGraph checkpointer<br/>in-memory or SQLite file")]
         files[("Generated images<br/>PNG + JSON metadata")]
+        authdb[("Accounts<br/>users · code hashes · sessions<br/>conversation list · admin settings<br/>SQLite")]
     end
+    smtp["SMTP server<br/>(sign-in codes)"]
 
     cli["<b>CLI</b> (src/cli.py)<br/>terminal chat"]
     bench["<b>Benchmark</b> (scripts/benchmark.py)<br/>latency · cost · quality reports"]
@@ -88,13 +96,16 @@ flowchart TB
     engine -- "checkpoint per thread_id" --> mem
     svc -- "save / read" --> files
     api -- "GET /api/images/{file}" --> files
+    api -- "sessions, ownership, settings" --> authdb
+    api -- "one-time codes" --> smtp
     svc -- "HTTPS" --> ext
 ```
 
 | Container | Technology | Responsibility |
 |---|---|---|
-| React SPA | React 18, TypeScript, Vite | Conversational UI with a live six-station agent pipeline, side-by-side editors with re-scoring, research panel with citations, fact-check badges and credibility ratings, exports, settings (offline mode, keys, provider priority, brand voice, usage) |
-| FastAPI app | FastAPI, uvicorn, Pydantic | 12 endpoints (see [API docs](api_documentation.md)); streams per-agent progress over SSE; picks an engine per provider configuration via the `EngineRegistry`; strips server paths; serves the SPA |
+| React SPA | React 18, TypeScript, Vite | Centred sign-in / sign-up card with code entry; sidebar with the signed-in user, New conversation, recent conversations and brand voice; live six-station agent pipeline, side-by-side editors with re-scoring, research panel with citations, fact-check badges and credibility ratings, exports; `/admin` dashboard for admins (offline mode, provider priority, quality threshold, configured keys, usage, accounts) |
+| FastAPI app | FastAPI, uvicorn, Pydantic | Auth, conversation and admin endpoints (see [API docs](api_documentation.md)); session checks and conversation ownership; streams per-agent progress over SSE; builds the engine from the admin's saved settings via the `EngineRegistry`; strips server paths; serves the SPA |
+| Auth store | SQLite (`src/auth/`) | Accounts, hashed one-time codes and sessions, each user's conversation list, admin settings ([ADR-0006](adr/0006-email-otp-accounts-and-admin-dashboard.md)) |
 | ContentBlitzEngine | LangGraph | Runs one conversational turn through the supervising graph; reads/writes checkpointed state |
 | Services | LangChain, requests | Model calls with retries + fallbacks; search and image provider chains; caching; usage/cost accounting |
 | Conversation memory | LangGraph `MemorySaver` / `SqliteSaver` | Per-thread state across turns (and restarts with SQLite) |
@@ -106,7 +117,8 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    api["<b>src/api</b> · HTTP layer<br/>server.py: 12 routes, SSE streaming, EngineRegistry<br/>schemas.py: request models"]
+    api["<b>src/api</b> · HTTP layer<br/>server.py: routes, session + ownership checks, SSE streaming, EngineRegistry<br/>schemas.py: request models"]
+    auth["<b>src/auth</b> · accounts<br/>service.py: sign-up / log-in codes, sessions, admins<br/>store.py: SQLite tables · mailer.py: SMTP or console"]
     core["<b>src/core</b> · application<br/>workflow.py: ContentBlitzEngine · router.py: heuristic + IntelligentRouter<br/>config.py: layered settings, tracing · resilience.py: retry, TTLCache, UsageTracker"]
     orch["<b>src/workflow</b> · orchestration<br/>langgraph_workflow.py: supervising StateGraph, next_step, finalize, error isolation<br/>state_management.py: ContentState"]
     agents["<b>src/agents</b> · six LangGraph subgraphs<br/>query_handler · research_agent · content_strategist · blog_writer · linkedin_writer · image_generator<br/>base.py: BaseAgent (build_graph, ask) · prompts.py: ChatPromptTemplates · schemas.py: Pydantic outputs"]
@@ -114,6 +126,7 @@ flowchart TB
     utils["<b>src/utils</b> · domain logic<br/>content_optimization: SEO, LinkedIn format · quality_validation: scores, brand voice<br/>source_verification: credibility, fact-check · export_tools · templates"]
     ext(["External providers"])
 
+    api --> auth
     api --> core --> orch --> agents
     agents --> integ --> ext
     agents --> utils
@@ -241,7 +254,7 @@ flowchart LR
         g -- fails --> m["MockChatModel<br/>offline, always answers"]
     end
 
-    fb -. "callback per attempt:<br/>provider · model · latency · tokens · cost" .-> t[("UsageTracker<br/>Settings panel · /api/usage")]
+    fb -. "callback per attempt:<br/>provider · model · latency · tokens · cost" .-> t[("UsageTracker<br/>admin dashboard · /api/admin/overview")]
     fb -. "if LANGSMITH_TRACING" .-> ls["LangSmith"]
 ```
 
@@ -267,9 +280,10 @@ sequenceDiagram
     participant G as Supervising graph
     participant S as Agent subgraphs
     participant M as Checkpointer
-    B->>A: POST /api/threads/{id}/chat {message, settings}
-    A->>R: engine for these settings (hashed, LRU, shared checkpointer)
-    A-->>B: event: start {providers, offline}
+    B->>A: POST /api/threads/{id}/chat {message} + session cookie
+    A->>A: session → user, check thread ownership (claim if new), title from first message
+    A->>R: engine for the admin's saved settings (hashed, LRU, shared checkpointer)
+    A-->>B: event: start {thread_id}
     A->>G: stream(message, thread_id)
     G->>M: load thread state
     loop each planned agent
@@ -296,7 +310,31 @@ sequenceDiagram
     A-->>B: re-scored blog (revision +1)
 ```
 
-### 7.3 Research-first campaign
+### 7.3 Sign-up and log-in with an email code
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser (sign-in card)
+    participant A as FastAPI /api/auth
+    participant S as Auth store (SQLite)
+    participant E as SMTP (or server log)
+    B->>A: POST login/start {email}
+    A->>S: user by email?
+    alt not registered
+        A-->>B: 404 not_registered → "isn't registered" + Sign up link
+        B->>A: POST signup/start {email, name}
+    end
+    A->>S: rate limits (30 s, 5/hour) · store salted hash of a new 6-digit code (10 min)
+    A->>E: send code
+    A-->>B: {sent, delivery, expires_in}
+    B->>A: POST verify {email, code, purpose}
+    A->>S: compare hash (≤ 5 tries) · delete code · create user on sign-up · create session (hash)
+    A-->>B: {user} + Set-Cookie cb_session (HttpOnly, SameSite=Lax)
+    B->>A: GET /api/threads (cookie) → sidebar: name, New conversation, recent conversations
+```
+
+### 7.4 Research-first campaign
 
 ```mermaid
 sequenceDiagram
@@ -341,8 +379,9 @@ sequenceDiagram
 | `history` | conversation | `last_topic`, `last_agents`, `turn`, used for context-aware routing |
 | `brand_voice` | conversation | per-thread override set from the UI (manual or learned) |
 
-Memory is `MemorySaver` by default or `SqliteSaver` with `CONTENTBLITZ_MEMORY=sqlite` (the Docker default). The browser
-stores its `thread_id` and restores the conversation on reload. Content-tab edits are written back with
+Memory is `MemorySaver` by default or `SqliteSaver` with `CONTENTBLITZ_MEMORY=sqlite` (the Docker default). Which
+threads belong to whom (and their titles) lives in the auth store; the browser remembers each user's last
+`thread_id` and restores it on reload, and the sidebar lists the rest. Content-tab edits are written back with
 `graph.update_state(..., as_node="finalize")`. See [ADR-0005](adr/0005-conversation-memory.md).
 
 ---
@@ -363,14 +402,15 @@ flowchart TB
         subgraph c ["container: contentblitz (non-root)"]
             uv["uvicorn src.api.server:app :8000<br/>SPA + REST + SSE<br/>HEALTHCHECK /api/health"]
         end
-        vol[("/data volume<br/>outputs/images · contentblitz_memory.sqlite")]
-        env["env: API keys · APP_ENV=production<br/>CONTENTBLITZ_MEMORY=sqlite · LANGSMITH_*"]
+        vol[("/data volume<br/>outputs/images · contentblitz_memory.sqlite<br/>contentblitz_auth.sqlite")]
+        env["env: API keys · APP_ENV=production<br/>CONTENTBLITZ_MEMORY=sqlite · ADMIN_EMAILS · SMTP_* · LANGSMITH_*"]
         uv --- vol
         env -.-> uv
     end
 
     user(["Browser"]) -- "HTTPS (TLS at the proxy)" --> rp["reverse proxy<br/>no buffering on /api/threads/*/chat"] --> uv
     uv -- HTTPS --> prov["LLM · search · image providers · LangSmith"]
+    uv -- "SMTP (TLS)" --> mail["Email provider"]
     dk -.-> p
 ```
 
@@ -390,8 +430,8 @@ flowchart TB
 | Cost | Model tiers, caching, research reuse, capped auto-rewrites; per-call cost tracking; `make bench` reports |
 | Content reliability | Research-first writing, `[n]` citations, source credibility ratings and claim verification, quality scores with auto-rewrite |
 | Observability | Live pipeline in the UI, per-attempt usage tracker, structured logs, optional LangSmith traces of every node and model call |
-| Security | Browser-held API keys sent per request, never stored or logged (engine selected by hashed config); no server paths in responses; image path-traversal checks; non-root container; CORS limited to dev origins |
-| Testability | Every external dependency behind an interface with an offline implementation; 155 Python tests incl. subgraph structure and the real `ChatOpenAI` client against a local server; Playwright browser tests |
+| Security | Email one-time-code sign-in, HttpOnly session cookies, hashed codes and tokens, rate limits; conversations owned per account; admin-only settings and usage; provider keys only on the server; no server paths in responses; image path-traversal checks; non-root container; CORS limited to dev origins |
+| Testability | Every external dependency behind an interface with an offline implementation (including a console mailer); 167 Python tests incl. subgraph structure and the real `ChatOpenAI` client against a local server; Playwright browser tests |
 | Modifiability | Prompts in one module, Pydantic schemas for outputs, providers configured in YAML, new agents = new subgraph + plan entry |
 
 ## 11. Decision records
@@ -403,3 +443,4 @@ flowchart TB
 | [0003](adr/0003-provider-retry-and-fallback-strategy.md) | Retry transient errors per provider, then fall back across providers, offline last |
 | [0004](adr/0004-deterministic-fact-checking.md) | Deterministic source credibility and claim verification |
 | [0005](adr/0005-conversation-memory.md) | Conversation memory with LangGraph checkpointers |
+| [0006](adr/0006-email-otp-accounts-and-admin-dashboard.md) | Email one-time-code accounts, owned conversations and an admin-only dashboard |

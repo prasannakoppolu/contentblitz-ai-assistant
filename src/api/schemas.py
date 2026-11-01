@@ -10,8 +10,9 @@ RESEARCH_PROVIDERS = ("serpapi", "perplexity", "tavily")
 
 
 class ClientSettings(BaseModel):
-    """Per-browser settings sent with each request. API keys stay in the browser's memory
-    and are only forwarded to build provider clients; they are never stored or logged."""
+    """Provider configuration used to build an engine. The server builds it from the
+    admin's saved :class:`ServerSettings`; ``api_keys`` are for programmatic callers
+    (tests, scripts). Customers never send keys: they come from the server's .env."""
 
     demo_mode: Optional[bool] = None
     api_keys: Dict[str, str] = Field(default_factory=dict)
@@ -20,9 +21,36 @@ class ClientSettings(BaseModel):
     quality_threshold: Optional[int] = Field(default=None, ge=0, le=100)
 
 
+class ServerSettings(BaseModel):
+    """Server-wide settings an admin edits on /admin. ``None`` means "use the default"."""
+
+    demo_mode: Optional[bool] = None
+    llm_primary: Optional[Literal["openai", "anthropic", "gemini"]] = None
+    research_primary: Optional[Literal["serpapi", "perplexity", "tavily"]] = None
+    quality_threshold: Optional[int] = Field(default=None, ge=50, le=95)
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
-    settings: ClientSettings = Field(default_factory=ClientSettings)
+
+
+class LoginStart(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+
+
+class SignupStart(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    name: str = Field(min_length=1, max_length=80)
+
+
+class VerifyCode(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    code: str = Field(min_length=4, max_length=12)
+    purpose: Literal["login", "signup"] = "login"
+
+
+class ThreadRename(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
 
 
 class BlogEdit(BaseModel):

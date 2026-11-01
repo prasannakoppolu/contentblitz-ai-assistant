@@ -10,6 +10,7 @@ New decisions get the next number; a decision that is replaced is marked **Super
 | [0003](0003-provider-retry-and-fallback-strategy.md) | Retry transient errors per provider, then fall back across providers, offline last | Accepted | 2026-10-29 |
 | [0004](0004-deterministic-fact-checking.md) | Deterministic source credibility and claim verification | Accepted | 2026-10-29 |
 | [0005](0005-conversation-memory.md) | Conversation memory with LangGraph checkpointers | Accepted | 2026-10-28 |
+| [0006](0006-email-otp-accounts-and-admin-dashboard.md) | Email one-time-code accounts, owned conversations and an admin-only dashboard | Accepted | 2026-11-01 |
 
 Template: see any ADR above (Status, Date, Deciders, Context, Decision, Options Considered, Trade-off Analysis,
 Consequences, Action Items).

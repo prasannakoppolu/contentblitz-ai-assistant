@@ -16,5 +16,6 @@ Rendered from the Mermaid sources in `README.md` and `docs/architecture.md` by `
 - [architecture-llm-call-path-retries-and-fallbacks](architecture-llm-call-path-retries-and-fallbacks.svg)
 - [architecture-chat-turn-with-live-progress-sse](architecture-chat-turn-with-live-progress-sse.svg)
 - [architecture-human-edit-and-re-score](architecture-human-edit-and-re-score.svg)
+- [architecture-sign-up-and-log-in-with-an-email-code](architecture-sign-up-and-log-in-with-an-email-code.svg)
 - [architecture-research-first-campaign](architecture-research-first-campaign.svg)
 - [architecture-deployment](architecture-deployment.svg)

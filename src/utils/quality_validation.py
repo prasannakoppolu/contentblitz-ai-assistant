@@ -235,7 +235,7 @@ def score_image(meta: Dict[str, Any]) -> QualityReport:
     total = int(round(sum(dims.values()) / len(dims)))
     suggestions = []
     if meta.get("provider") == "placeholder":
-        suggestions.append("Generated with the offline placeholder renderer; add an OpenAI or Stability key for AI imagery.")
+        suggestions.append("Generated with the offline placeholder renderer; AI imagery appears once an image service is available.")
     if dims["resolution"] < 100:
         suggestions.append("Use at least 1024px for crisp social and blog visuals.")
     return QualityReport("image", total, _grade(total), dims, suggestions, {})

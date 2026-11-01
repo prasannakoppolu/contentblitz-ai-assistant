@@ -23,7 +23,7 @@ conversational **React** interface (served by a FastAPI backend) with memory, qu
 | **Source credibility & fact-checking** | Every source gets a credibility rating; every finding and statistic is checked against the source it cites, and unconfirmed claims are flagged in the Research tab |
 | **Observability & benchmarks** | LangSmith tracing of every agent node and model call (`LANGSMITH_TRACING=true`); `make bench` measures latency, cost and quality per provider configuration |
 | **Resilience** | Exponential backoff with jitter, non-retryable auth errors, per-agent error isolation, graceful degradation |
-| **Cost control** | 30-min TTL research cache, model tiers (mini for routing/meta/hashtags), usage & cost tracker in the UI |
+| **Cost control** | 30-min TTL research cache, model tiers (mini for routing/meta/hashtags), usage & cost tracker on the admin dashboard |
 | **SEO engine** | Keyword strategy, 1-2% density check, 150-160 char meta descriptions, H1/H2/H3 audit, internal-link suggestions, Flesch scores |
 | **LinkedIn engine** | Hook-first templates, 1,300-1,600 character window, 8-12 hashtags, CTA detection, line-break optimisation |
 | **Quality pipeline** | 0-100 scores per asset with sub-dimensions and suggestions; blogs below threshold are auto-refined |
@@ -31,8 +31,10 @@ conversational **React** interface (served by a FastAPI backend) with memory, qu
 | **Memory** | LangGraph checkpointer per conversation thread: in-memory by default, SQLite (`CONTENTBLITZ_MEMORY=sqlite`, the Docker default) to survive restarts; the browser remembers its conversation and restores it on reload |
 | **Content series** | "Write a 3-part blog series about X" produces distinct, angle-driven parts |
 | **Export** | Markdown · HTML · Plain text · PDF · WordPress WXR (CMS import) · scheduler JSON (Buffer/Hootsuite) · PNG |
-| **Web UI** | React + TypeScript (Vite): chat with a live six-station agent pipeline, content editor with instant re-scoring, research panel with linked citations, exports, settings; responsive, dark mode |
-| **Testing** | 155 Python tests (unit / API / integration / e2e incl. real-browser Playwright and the real `ChatOpenAI` client against a local OpenAI-compatible server), **96% coverage**, plus 17 Vitest component tests; CI on Python 3.11 & 3.12 |
+| **Accounts** | Email sign-in with a 6-digit one-time code (SMTP, or the server log in development); unknown emails are told to sign up; HttpOnly session cookie; each person sees only their own conversations |
+| **Web UI** | React + TypeScript (Vite): centred sign-in card, sidebar with the signed-in user, **New conversation** and recent conversations, chat with a live six-station agent pipeline, content editor with instant re-scoring, research panel with linked citations, exports; responsive, dark mode |
+| **Admin dashboard** | `/admin`, only for `ADMIN_EMAILS`: offline mode, provider priority, quality threshold, which keys are configured, usage and cost since start-up, accounts. Customers never see any of it |
+| **Testing** | 167 Python tests (unit / API / auth / integration / e2e incl. real-browser Playwright sign-in flows and the real `ChatOpenAI` client against a local OpenAI-compatible server), **96% coverage**, plus 27 Vitest component tests; CI on Python 3.11 & 3.12 |
 
 ---
 
@@ -40,8 +42,10 @@ conversational **React** interface (served by a FastAPI backend) with memory, qu
 
 ```mermaid
 flowchart TB
-    U(["👤 User"]) --> UI["React SPA<br/>Chat · Content · Research · Export"]
-    UI -- "REST + SSE" --> API["FastAPI · src/api/server.py"]
+    U(["👤 User"]) --> UI["React SPA<br/>Sign-in · Chat · Content · Research · Export · Admin"]
+    UI -- "REST + SSE<br/>session cookie" --> API["FastAPI · src/api/server.py"]
+    API --> AUTH[("Auth store · SQLite<br/>users · codes · sessions · conversations")]
+    AUTH -. one-time codes .-> SMTP["SMTP email"]
     API --> QH
 
     subgraph SUP ["LangGraph supervising graph (ContentBlitzEngine) · each agent is its own subgraph"]
@@ -105,15 +109,18 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 (cd frontend && npm ci && npm run build)        # Node 20+
 
-# Option A: offline demo (no keys, no cost)
-CONTENTBLITZ_MOCK=1 uvicorn src.api.server:app --port 8000
+# Option A: offline demo (no keys, no cost; sign-in codes appear on screen)
+make demo                # = CONTENTBLITZ_MOCK=1 CONTENTBLITZ_AUTH_DEV_CODES=1 ADMIN_EMAILS=admin@example.com uvicorn ...
 
 # Option B: real providers
-cp .env.example .env     # add any keys you have; missing ones are skipped
+cp .env.example .env     # add any keys you have (missing ones are skipped), SMTP settings and ADMIN_EMAILS
 uvicorn src.api.server:app --port 8000
 ```
 
-Open http://localhost:8000. API keys can also be pasted into Settings; they stay in that browser tab's memory only.
+Open http://localhost:8000 and **sign up**: enter your name and email, then the 6-digit code. With `SMTP_HOST` set
+the code is emailed; without it the code is printed in the server log (and shown on screen when
+`CONTENTBLITZ_AUTH_DEV_CODES=1`). Log in later with just your email and a fresh code. Sign up with an address listed
+in `ADMIN_EMAILS` to get the **Admin dashboard** link. Provider keys live only in the server's `.env`.
 To point at an OpenAI-compatible endpoint (Azure OpenAI, vLLM, Ollama), set `models.openai.base_url` in
 `config/services.yaml`.
 
@@ -135,7 +142,12 @@ To point at an OpenAI-compatible endpoint (Azure OpenAI, vLLM, Ollama), set `mod
 | `SERPAPI_API_KEY` · `PERPLEXITY_API_KEY` · `TAVILY_API_KEY` | Research engines |
 | `STABILITY_API_KEY` | Stable Image Core (image fallback) |
 | `APP_ENV` | `development` / `production` / `test`: selects `config/<env>.yaml` |
-| `CONTENTBLITZ_MOCK` | `1` forces offline mode |
+| `CONTENTBLITZ_MOCK` | `1` forces offline mode (admins can also switch offline mode on `/admin`) |
+| `ADMIN_EMAILS` | Comma-separated emails that can open the admin dashboard |
+| `SMTP_HOST` · `SMTP_PORT` · `SMTP_USER` · `SMTP_PASSWORD` · `SMTP_FROM` · `SMTP_STARTTLS` | Email delivery for sign-in codes (port 465 = TLS, otherwise STARTTLS). Unset: codes go to the server log |
+| `CONTENTBLITZ_AUTH_DB` | SQLite file for accounts, sessions, conversation lists and admin settings (default `data/contentblitz_auth.sqlite`) |
+| `CONTENTBLITZ_AUTH_DEV_CODES` | `1` shows the sign-in code on screen when email isn't configured. Development only |
+| `CONTENTBLITZ_COOKIE_SECURE` | `1` marks the session cookie `Secure` (set it when serving over HTTPS) |
 | `CONTENTBLITZ_OUTPUT_DIR` | Where images and metadata are saved (default `outputs/`) |
 | `CONTENTBLITZ_MEMORY` | `memory` (default) or `sqlite` to keep conversations across server restarts |
 | `CONTENTBLITZ_MEMORY_PATH` | SQLite file for conversation memory (default `contentblitz_memory.sqlite`; Docker: `/data/...`) |
@@ -197,8 +209,8 @@ the live OpenAPI docs are at http://localhost:8000/docs.
   long-form writing uses **premium**. Edit tiers in `config/services.yaml`.
 - Research for a topic is **reused across turns**, so a follow-up blog/LinkedIn post doesn't re-search.
 - `max_refinement_loops` caps automatic rewrites (1 in dev, 2 in prod).
-- Settings → **Usage since the server started** shows API calls, estimated cost, cache hits and the active writing chain
-  for your provider configuration (`POST /api/usage` returns the full breakdown, including tokens).
+- Admin dashboard → **Usage since the server started** shows API calls, failed attempts, estimated cost, tokens, cache
+  hits and the active provider chains (`GET /api/admin/overview` returns the same data).
 - For development, Gemini Flash's free tier plus Tavily's free tier is the cheapest live configuration.
 - Research searches run in parallel, so a research turn takes about as long as the slowest single search.
 - Measure before you choose: `make bench-live LABEL=... ARGS="--llm anthropic"` writes a latency/cost/quality
@@ -208,7 +220,12 @@ the live OpenAPI docs are at http://localhost:8000/docs.
 
 | Symptom | Fix |
 |---|---|
-| Banner says *offline demo mode* | Offline mode is on (the default when the server has no keys). Add keys to `.env` or Settings → API keys, then untick **Offline demo mode** in Settings. |
+| Replies say content is a placeholder or sample | Offline mode is on (the default when the server has no keys). Add keys to `.env`, restart, then untick **Offline mode** on the admin dashboard. |
+| *"… isn't registered with ContentBlitz yet"* | That email has no account. Choose **Sign up with this email**, add your name and confirm the code. |
+| No sign-in email arrives | Without `SMTP_HOST` codes are printed in the server log. With SMTP, check the log for `email_failed`, the spam folder, and your provider's app-password / sender rules. |
+| *"A code was just sent"* / *"Too many codes"* | Codes can be re-sent every 30 s and 5 times an hour per email; a code allows 5 wrong tries and expires after 10 minutes. |
+| Signed out after restarting the server | Sessions live in `CONTENTBLITZ_AUTH_DB`; keep that file (Docker keeps it on the `/data` volume). |
+| Admin dashboard link missing | Your email must be in `ADMIN_EMAILS` (comma-separated); restart after changing it. |
 | Page says *ContentBlitz can't reach its server* | The API isn't running (or not on :8000 for `make web`). Start it with `uvicorn src.api.server:app --port 8000`. |
 | `{"detail":"Not Found"}` at http://localhost:8000/ | The UI isn't built. Run `cd frontend && npm ci && npm run build`, then restart the server. |
 | Agent progress arrives all at once behind a proxy | Disable response buffering for `/api/threads/*/chat` (see the deployment guide). |
@@ -216,7 +233,7 @@ the live OpenAPI docs are at http://localhost:8000/docs.
 | `AuthenticationError` / `auth error 401` in the server log or *Provider attempts* | Invalid key: auth errors are not retried, so the next provider is used. Fix the key. |
 | `RateLimitError` / `rate limited (429)` warnings | Retried automatically with backoff on the same provider, then the next provider takes over; reduce concurrency or add another provider. |
 | Research tab flags claims as *Figure not found in source* | The cited source's snippet doesn't contain the number. Open the source and confirm it before publishing; in offline mode most claims are flagged because the demo sources are generic. |
-| Answers come from `mock` although keys are set | Check the server log for the provider error; also make sure `CONTENTBLITZ_MOCK` isn't `1` and *Offline demo mode* is unticked. |
+| Answers come from `mock` although keys are set | Check the server log for the provider error; also make sure `CONTENTBLITZ_MOCK` isn't `1` and **Offline mode** is unticked on the admin dashboard. |
 | Follow-up applied to the wrong piece | Name it explicitly: *"make the **blog** shorter"*. |
 | PDF export unavailable | `pip install reportlab`. |
 | Conversation gone after a server restart | Set `CONTENTBLITZ_MEMORY=sqlite` (already set in Docker). |

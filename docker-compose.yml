@@ -10,6 +10,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-production}
       CONTENTBLITZ_MOCK: ${CONTENTBLITZ_MOCK:-0}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
     volumes:
       - contentblitz-data:/data
     restart: unless-stopped

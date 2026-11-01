@@ -4,33 +4,68 @@
 
 Interactive OpenAPI docs: `http://localhost:8000/docs`. Conversation memory backend: `CONTENTBLITZ_MEMORY` (`memory` | `sqlite`).
 
+### Authentication
+
+Accounts sign in with their email and a 6-digit one-time code. `POST /api/auth/verify` sets an HttpOnly,
+`SameSite=Lax` session cookie (`cb_session`, 14 days; add `Secure` with `CONTENTBLITZ_COOKIE_SECURE=1`). Every
+endpoint except `health`, `config` and `/api/auth/*` returns **401** `{"code": "not_signed_in"}` without it.
+Conversations belong to the account that created them: another account gets **404** for them. `/api/admin/*` also
+requires an email listed in `ADMIN_EMAILS` (otherwise **403** `admin_only`).
+
+Errors from the auth layer are `{"detail": "<message for people>", "code": "<machine code>", ...extra}`:
+
+| Code | Status | When |
+|---|---|---|
+| `invalid_email` / `invalid_name` | 422 | Malformed email, or empty / over-long name |
+| `not_registered` | 404 | Login with an email that has no account; the UI offers sign-up |
+| `already_registered` | 409 | Sign-up with an email that already has an account |
+| `resend_too_soon` | 429 | New code within 30 s of the last one (`retry_after` seconds) |
+| `too_many_codes` | 429 | More than 5 codes in an hour for one email |
+| `wrong_code` | 401 | Code doesn't match (`attempts_left`) |
+| `too_many_attempts` | 429 | 5 wrong codes: the code is burnt |
+| `code_expired` | 410 | No live code (expired after 10 min, already used, or never sent) |
+| `email_failed` | 502 | SMTP delivery failed; no code was stored |
+
 | Method & path | Body | Response |
 |---|---|---|
 | `GET /api/health` | – | `{status, time}` |
-| `GET /api/config` | – | detected key names, default demo mode, quality threshold, fallback chains, default brand voice |
-| `POST /api/threads` | – | `{thread_id}` |
+| `GET /api/config` | – | default brand voice, `env`, `email_delivery` (`email` \| `console`). No provider details |
+| `POST /api/auth/login/start` | `{email}` | `CodeSent` or `not_registered` |
+| `POST /api/auth/signup/start` | `{email, name}` | `CodeSent` or `already_registered` |
+| `POST /api/auth/verify` | `{email, code, purpose: "login"\|"signup"}` | `{user}` + session cookie; sign-up creates the account here |
+| `POST /api/auth/logout` | – | `{ok}`; deletes the session |
+| `GET /api/auth/me` | – | `{user: {id, email, name, is_admin, created_at}}` |
+| `GET /api/threads` | – | `{threads: [{thread_id, title, created_at, updated_at}]}`, newest first; title = first message |
+| `POST /api/threads` | – | `{thread_id}` (owned by the caller) |
+| `PATCH /api/threads/{tid}` | `{title}` | renamed |
+| `DELETE /api/threads/{tid}` | – | removed from the caller's list |
 | `GET /api/threads/{tid}/state` | – | UI-safe state (messages, research, blog, linkedin, image with `src`, trace, …) |
-| `POST /api/threads/{tid}/chat` | `{message, settings}` | `text/event-stream` (below) |
+| `POST /api/threads/{tid}/chat` | `{message}` | `text/event-stream` (below) |
 | `PUT /api/threads/{tid}/artifacts/blog` | `{markdown, meta_description}` | re-scored blog (revision +1) |
 | `PUT /api/threads/{tid}/artifacts/linkedin` | `{text}` | re-scored post |
 | `PUT /api/threads/{tid}/brand-voice` | `BrandVoice` | saved voice |
 | `POST /api/brand-voice/learn` | `{samples[], base?}` | learned `BrandVoice` (not saved) |
-| `POST /api/usage` | `settings` | calls, failures, tokens, cost, cache, provider chains, `offline` |
 | `GET /api/threads/{tid}/export/{artifact}/{fmt}` | – | download; `blog`/`report`: `md html txt pdf wxr`; `series`: `wxr`; `linkedin`: `txt json` |
 | `GET /api/images/{file}` | – | generated image |
+| `GET /api/admin/overview` | – | saved + effective settings, configured key names, fallback chains, usage (calls, failures, tokens, cost, cache, chains, `offline`), tracing, email delivery, accounts and totals |
+| `PUT /api/admin/settings` | `ServerSettings` | saved settings; applies to every customer's next message |
 
-`settings` (`ClientSettings`): `{demo_mode?, api_keys{openai,anthropic,gemini,serpapi,perplexity,tavily,stability},
-llm_primary?, research_primary?, quality_threshold?}`. Omitted fields fall back to server config.
+`CodeSent`: `{sent, email, purpose, delivery: "email"|"console", expires_in, resend_after, dev_code?}`; `dev_code` is
+present only with console delivery and `CONTENTBLITZ_AUTH_DEV_CODES=1`.
+
+`ServerSettings`: `{demo_mode?, llm_primary?: "openai"|"anthropic"|"gemini", research_primary?:
+"serpapi"|"perplexity"|"tavily", quality_threshold?: 50-95}`. `null` means the server default. Provider keys are
+read from the environment only; the browser never sends or receives them.
 
 **Chat stream events**
 
 ```
-event: start  data: {"thread_id": "...", "providers": {"llm": [...], ...}, "offline": true}
+event: start  data: {"thread_id": "..."}
 event: node   data: {"node": "query_handler", "trace": {...}, "plan": ["research","blog"], "topic": "..."}
 event: node   data: {"node": "research", "trace": {"agent":"research","status":"ok","detail":"10 sources via serpapi; 6/9 claims verified", ...}}
 ...
 event: done   data: { full UI-safe state }
-event: error  data: {"message": "..."}        # stream ends after an error
+event: error  data: {"message": "..."}        # generic message; details stay in the server log. Stream ends
 ```
 
 ## Engine (`src/core/workflow.py`)
