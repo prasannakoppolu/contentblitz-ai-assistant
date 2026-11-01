@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { relativeTime } from "../settings";
 import type { AdminOverview, LLMProvider, ResearchProvider, ServerSettings, User } from "../types";
-import { BrandMark } from "./AuthScreen";
+import { BrandMark, Icon } from "./Art";
 
 const KEY_LABELS: Record<string, string> = {
   openai: "OpenAI (GPT-4o, DALL-E)",
@@ -67,8 +67,8 @@ export function AdminPage({ user, onBack, notify }: Props) {
           ContentBlitz admin
         </p>
         <span className="admin__who muted small">{user.email}</span>
-        <button type="button" className="btn" onClick={onBack}>
-          Back to workspace
+        <button type="button" className="btn btn--pill" onClick={onBack}>
+          <Icon.ArrowLeft size={16} /> Back to workspace
         </button>
       </header>
 
@@ -122,7 +122,7 @@ export function AdminPage({ user, onBack, notify }: Props) {
                   onChange={(e) => setDraft({ ...draft, quality_threshold: Number(e.target.value) })}
                 />
               </label>
-              <button type="button" className="btn btn--primary" onClick={save} disabled={saving}>
+              <button type="button" className="btn btn--primary btn--pill" onClick={save} disabled={saving}>
                 {saving ? "Saving…" : "Save settings"}
               </button>
             </section>
@@ -159,7 +159,7 @@ export function AdminPage({ user, onBack, notify }: Props) {
                 <Big value={data.usage.total_tokens.toLocaleString()} label="tokens" />
                 <Big value={`${data.usage.cache.hits}/${data.usage.cache.hits + data.usage.cache.misses}`} label="cache hits" />
               </div>
-              <button type="button" className="btn" onClick={() => void load()}>
+              <button type="button" className="btn btn--pill" onClick={() => void load()}>
                 Refresh
               </button>
             </section>

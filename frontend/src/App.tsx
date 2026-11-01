@@ -9,6 +9,7 @@ import { Pipeline, stationStatuses } from "./components/Pipeline";
 import { ResearchPanel } from "./components/ResearchPanel";
 import { Sidebar } from "./components/Sidebar";
 import { useToast } from "./components/Toast";
+import { Icon } from "./components/Art";
 import { forgetThread, storeThread, storedThread } from "./settings";
 import type { AppConfig, ConversationState, ThreadSummary, TraceEntry, User } from "./types";
 
@@ -263,23 +264,29 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
       {sidebarOpen && <div className="scrim" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
       <main className="main">
         <header className="masthead">
-          <button type="button" className="btn menu-btn" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}>
-            Menu
+          <button
+            type="button"
+            className="icon-btn menu-btn"
+            aria-label="Menu"
+            aria-expanded={sidebarOpen}
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Icon.Menu />
           </button>
           <div className="masthead__title">
             <h1>{title}</h1>
             <p>{state.topic && state.messages.length ? `Topic: ${state.topic}` : `Welcome back, ${firstName}.`}</p>
           </div>
+          <nav className="tabs" role="tablist" aria-label="Workspace">
+            {TABS.map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={tab === id} className="tab" onClick={() => setTab(id)}>
+                {label}
+                {counts[id] ? <span className="tab__count">{counts[id]}</span> : null}
+              </button>
+            ))}
+          </nav>
         </header>
         <Pipeline statuses={statuses} details={details} />
-        <nav className="tabs" role="tablist" aria-label="Workspace">
-          {TABS.map(([id, label]) => (
-            <button key={id} role="tab" aria-selected={tab === id} className="tab" onClick={() => setTab(id)}>
-              {label}
-              {counts[id] ? <span className="tab__count">{counts[id]}</span> : null}
-            </button>
-          ))}
-        </nav>
         <div className="panel" role="tabpanel">
           {tab === "chat" && (
             <Chat

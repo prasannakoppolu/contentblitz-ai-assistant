@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { initials, relativeTime } from "../settings";
 import type { BrandVoice, ThreadSummary, User } from "../types";
-import { BrandMark } from "./AuthScreen";
+import { BrandMark, Icon } from "./Art";
 
 interface Props {
   user: User;
@@ -25,30 +25,22 @@ export function Sidebar(p: Props) {
     <aside className={`sidebar ${p.open ? "sidebar--open" : ""}`} aria-label="Account and conversations">
       <div className="sidebar__top">
         <p className="sidebar__brand">
-          <BrandMark size={22} />
+          <BrandMark size={24} />
           ContentBlitz
         </p>
-        <button type="button" className="btn btn--ghost sidebar__close" onClick={p.onClose} aria-label="Close menu">
-          Close
+        <button type="button" className="icon-btn sidebar__close" onClick={p.onClose} aria-label="Close menu">
+          <Icon.X />
         </button>
       </div>
 
-      <div className="account" aria-label="Signed in as">
-        <span className="account__avatar" aria-hidden="true">{initials(p.user.name)}</span>
-        <span className="account__who">
-          <strong className="account__name">{p.user.name}</strong>
-          <span className="account__email">{p.user.email}</span>
-        </span>
-      </div>
-
-      <button type="button" className="btn btn--primary btn--block sidebar__new" onClick={p.onNewConversation} disabled={p.running}>
-        <span aria-hidden="true" className="plus">+</span> New conversation
+      <button type="button" className="new-chat" onClick={p.onNewConversation} disabled={p.running}>
+        <Icon.Plus /> New conversation
       </button>
 
       <nav className="threads" aria-label="Recent conversations">
-        <h2 className="side-heading">Recent conversations</h2>
+        <h2 className="side-heading">Recent</h2>
         {p.threads.length === 0 ? (
-          <p className="muted small">Your conversations appear here once you send a message.</p>
+          <p className="side-empty">Your conversations appear here once you send a message.</p>
         ) : (
           <ul>
             {p.threads.map((t) => (
@@ -70,7 +62,7 @@ export function Sidebar(p: Props) {
                   disabled={p.running}
                   onClick={() => p.onDeleteThread(t.thread_id)}
                 >
-                  ×
+                  <Icon.X size={14} />
                 </button>
               </li>
             ))}
@@ -79,25 +71,34 @@ export function Sidebar(p: Props) {
       </nav>
 
       <details className="side-group">
-        <summary>Brand voice</summary>
+        <summary>
+          <Icon.Voice /> Brand voice
+        </summary>
         <VoiceEditor threadId={p.threadId} voice={p.voice} onSaved={p.onVoiceSaved} />
       </details>
 
+      <div className="account" aria-label="Signed in as">
+        <span className="account__avatar" aria-hidden="true">{initials(p.user.name)}</span>
+        <span className="account__who">
+          <strong className="account__name">{p.user.name}</strong>
+          <span className="account__email">{p.user.email}</span>
+        </span>
+      </div>
       <div className="sidebar__foot">
         {p.user.is_admin && (
           <a
-            className="btn btn--ghost btn--block sidebar__admin"
+            className="side-link"
             href="/admin"
             onClick={(e) => {
               e.preventDefault();
               p.onOpenAdmin();
             }}
           >
-            Admin dashboard
+            <Icon.Gauge /> Admin dashboard
           </a>
         )}
-        <button type="button" className="btn btn--block" onClick={p.onSignOut}>
-          Sign out
+        <button type="button" className="side-link" onClick={p.onSignOut}>
+          <Icon.Logout /> Sign out
         </button>
       </div>
     </aside>
@@ -141,7 +142,7 @@ function VoiceEditor({ threadId, voice, onSaved }: { threadId: string; voice: Br
       </label>
       <button
         type="button"
-        className="btn"
+        className="btn btn--pill"
         disabled={!threadId}
         onClick={() => save({ ...draft, banned_phrases: draft.banned_phrases.map((s) => s.trim()).filter(Boolean) }, "Brand voice saved for this conversation.")}
       >
@@ -151,7 +152,7 @@ function VoiceEditor({ threadId, voice, onSaved }: { threadId: string; voice: Br
         <span>Or paste 1–3 samples of your writing</span>
         <textarea rows={4} value={samples} onChange={(e) => setSamples(e.target.value)} />
       </label>
-      <button type="button" className="btn" disabled={!samples.trim() || !threadId} onClick={learn}>
+      <button type="button" className="btn btn--pill" disabled={!samples.trim() || !threadId} onClick={learn}>
         Learn voice from samples
       </button>
       {msg && <p className="small" role="status">{msg}</p>}
