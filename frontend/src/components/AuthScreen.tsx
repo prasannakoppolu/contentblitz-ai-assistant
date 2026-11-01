@@ -55,7 +55,7 @@ function RotatingLine() {
   );
 }
 
-/** The sign-in landing page: centred hero with the email form, plus a short "learn more" section. */
+/** The sign-in landing page: centred hero with the email form. */
 export function AuthScreen({ onSignedIn, initialMode = "login" }: Props) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
@@ -63,7 +63,6 @@ export function AuthScreen({ onSignedIn, initialMode = "login" }: Props) {
   const [sent, setSent] = useState<CodeSent | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; code?: string } | null>(null);
-  const more = useRef<HTMLElement>(null);
 
   const switchTo = (m: Mode) => {
     setMode(m);
@@ -193,41 +192,7 @@ export function AuthScreen({ onSignedIn, initialMode = "login" }: Props) {
             </form>
           </>
         )}
-        <button
-          type="button"
-          className="float-pill hero__more"
-          onClick={() => more.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-        >
-          Learn more <Icon.ArrowDown />
-        </button>
       </main>
-
-      <section ref={more} className="tour" aria-labelledby="tour-title">
-        <div className="tour__stage" aria-hidden="true">
-          <span className="tour__center"><BrandMark size={40} /></span>
-          {(["query_handler", "research", "strategist", "blog", "linkedin", "image"] as AgentKey[]).map((a, i) => (
-            <span key={a} className={`tour__obj tour__obj--${i + 1}`}>
-              <AgentObject agent={a} size={72} />
-            </span>
-          ))}
-        </div>
-        <h2 id="tour-title" className="tour__title">Six agents, one conversation</h2>
-        <div className="tour__points">
-          <div>
-            <h3>Research you can check</h3>
-            <p>Every finding cites its source, sources get a credibility rating, and figures are checked against them.</p>
-          </div>
-          <div>
-            <h3>Writing that ranks and reads well</h3>
-            <p>SEO blog posts and LinkedIn posts are scored for quality and rewritten automatically when they fall short.</p>
-          </div>
-          <div>
-            <h3>Always in your brand voice</h3>
-            <p>Set your tone and phrases to avoid, or paste a few samples and ContentBlitz learns how you write.</p>
-          </div>
-        </div>
-        <p className="tour__foot">ContentBlitz · Research, blog posts, LinkedIn posts and visuals from one conversation.</p>
-      </section>
     </div>
   );
 }
