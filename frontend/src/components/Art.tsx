@@ -161,6 +161,24 @@ export const Icon = {
   Voice: ({ size = 16, ...p }: IconProps) => (
     <svg {...base(size)} {...p}><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" /></svg>
   ),
+  Doc: ({ size = 20, ...p }: IconProps) => (
+    <svg {...base(size)} {...p}><path d="M7 3.5h7l4.5 4.5v11a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5Z" /><path d="M13.5 3.5V8.5h5M9 12.5h6M9 16h4" /></svg>
+  ),
+  Search: ({ size = 20, ...p }: IconProps) => (
+    <svg {...base(size)} {...p}><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4.5 4.5" /></svg>
+  ),
+  Download: ({ size = 20, ...p }: IconProps) => (
+    <svg {...base(size)} {...p}><path d="M12 4v10.5M7.5 10 12 14.5 16.5 10" /><path d="M5 15.5v2A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5v-2" /></svg>
+  ),
+  Bubble: ({ size = 20, ...p }: IconProps) => (
+    <svg {...base(size)} {...p}><path d="M12 4.5c4.7 0 8 2.9 8 6.6s-3.3 6.6-8 6.6c-.9 0-1.8-.1-2.6-.3L5 19.5l.9-3.5C4.7 14.8 4 13.1 4 11.1c0-3.7 3.3-6.6 8-6.6Z" /></svg>
+  ),
+  Dots: ({ size = 18, ...p }: IconProps) => (
+    <svg {...base(size)} {...p}><circle cx="5.5" cy="12" r="1.1" fill="currentColor" /><circle cx="12" cy="12" r="1.1" fill="currentColor" /><circle cx="18.5" cy="12" r="1.1" fill="currentColor" /></svg>
+  ),
+  Panel: ({ size = 18, ...p }: IconProps) => (
+    <svg {...base(size)} {...p}><rect x="3.5" y="4.5" width="17" height="15" rx="3" /><path d="M9.5 4.5v15" /></svg>
+  ),
   Mail: ({ size = 18, ...p }: IconProps) => (
     <svg {...base(size)} {...p}><rect x="3.5" y="5.5" width="17" height="13" rx="3" /><path d="m4.5 7.5 7.5 6 7.5-6" /></svg>
   ),

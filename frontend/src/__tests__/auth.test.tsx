@@ -3,7 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "../api";
 import { AuthScreen } from "../components/AuthScreen";
-import { Sidebar } from "../components/Sidebar";
+import { Rail } from "../components/Rail";
+import { SidePanel } from "../components/Sidebar";
 import { initials, relativeTime } from "../settings";
 import type { CodeSent, User } from "../types";
 
@@ -73,10 +74,56 @@ describe("AuthScreen", () => {
   });
 });
 
-describe("Sidebar", () => {
+describe("Rail", () => {
+  const props = {
+    user,
+    view: "chat" as const,
+    counts: { research: 10 },
+    voiceOpen: false,
+    onSelect: vi.fn(),
+    onToggleVoice: vi.fn(),
+    onOpenAdmin: vi.fn(),
+    onSignOut: vi.fn(),
+  };
+
+  it("offers Chat, Content, Research and Export as icons and marks the current page", async () => {
+    render(<Rail {...props} />);
+    expect(screen.getByRole("button", { name: "Chat" })).toHaveAttribute("aria-current", "page");
+    await userEvent.click(screen.getByRole("button", { name: "Content" }));
+    expect(props.onSelect).toHaveBeenCalledWith("content");
+    await userEvent.click(screen.getByRole("button", { name: "Research" }));
+    expect(props.onSelect).toHaveBeenCalledWith("research");
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    expect(props.onSelect).toHaveBeenCalledWith("export");
+    for (const gone of [/API keys/i, /Offline/i, /Providers and quality/i, /Usage since/i]) {
+      expect(screen.queryByText(gone)).toBeNull();
+    }
+  });
+
+  it("shows the user's initials and opens a menu with Sign out", async () => {
+    render(<Rail {...props} />);
+    const avatar = screen.getByRole("button", { name: "Account: Ana Lopez" });
+    expect(avatar).toHaveTextContent("AL");
+    expect(screen.queryByRole("menuitem", { name: "Sign out" })).toBeNull();
+    await userEvent.click(avatar);
+    expect(screen.getByRole("menu", { name: "Account" })).toHaveTextContent("ana@example.com");
+    expect(screen.queryByRole("menuitem", { name: "Admin dashboard" })).toBeNull();
+    await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
+    expect(props.onSignOut).toHaveBeenCalled();
+  });
+
+  it("gives admins a dashboard link in the account menu", async () => {
+    render(<Rail {...props} user={{ ...user, is_admin: true }} />);
+    await userEvent.click(screen.getByRole("button", { name: "Account: Ana Lopez" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Admin dashboard" }));
+    expect(props.onOpenAdmin).toHaveBeenCalled();
+  });
+});
+
+describe("SidePanel", () => {
   const voice = { name: "ContentBlitz", tone: "clear", audience: "marketers", style_rules: [], banned_phrases: [], preferred_terms: {} };
   const base = {
-    user,
+    mode: "chats" as const,
     threads: [
       { thread_id: "a", title: "Hybrid work post", created_at: 0, updated_at: Date.now() / 1000 },
       { thread_id: "b", title: "", created_at: 0, updated_at: Date.now() / 1000 - 7200 },
@@ -84,39 +131,45 @@ describe("Sidebar", () => {
     threadId: "a",
     voice,
     running: false,
-    open: false,
+    pinned: false,
     onSelectThread: vi.fn(),
     onDeleteThread: vi.fn(),
     onNewConversation: vi.fn(),
     onVoiceSaved: vi.fn(),
-    onSignOut: vi.fn(),
-    onOpenAdmin: vi.fn(),
+    onTogglePin: vi.fn(),
     onClose: vi.fn(),
   };
 
-  it("shows who is signed in, their conversations and a New conversation button, with no provider settings", async () => {
-    render(<Sidebar {...base} />);
-    expect(screen.getByText("Ana Lopez")).toBeInTheDocument();
-    expect(screen.getByText("ana@example.com")).toBeInTheDocument();
+  it("lists, searches, opens and removes conversations", async () => {
+    render(<SidePanel {...base} />);
     expect(screen.getByRole("button", { name: "Hybrid work post just now" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("2 h ago")).toBeInTheDocument();
-    for (const gone of [/API keys/i, /Offline/i, /Providers and quality/i, /Usage since/i, /Admin dashboard/]) {
-      expect(screen.queryByText(gone)).toBeNull();
-    }
-    await userEvent.click(screen.getByRole("button", { name: /New conversation$/ }));
-    expect(base.onNewConversation).toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: /^New conversation 2 h ago/ }));
     expect(base.onSelectThread).toHaveBeenCalledWith("b");
     await userEvent.click(screen.getByRole("button", { name: 'Remove "Hybrid work post" from the list' }));
     expect(base.onDeleteThread).toHaveBeenCalledWith("a");
-    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(base.onSignOut).toHaveBeenCalled();
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search conversations" }), "hybrid");
+    expect(screen.queryByText("2 h ago")).toBeNull();
+    await userEvent.clear(screen.getByRole("searchbox"));
+    await userEvent.type(screen.getByRole("searchbox"), "zzz");
+    expect(screen.getByText('No conversations match "zzz".')).toBeInTheDocument();
   });
 
-  it("links admins to the dashboard", async () => {
-    render(<Sidebar {...base} user={{ ...user, is_admin: true }} />);
-    await userEvent.click(screen.getByRole("link", { name: "Admin dashboard" }));
-    expect(base.onOpenAdmin).toHaveBeenCalled();
+  it("has an options menu to keep the panel visible or start a conversation", async () => {
+    render(<SidePanel {...base} />);
+    await userEvent.click(screen.getByRole("button", { name: "Conversation options" }));
+    const keep = screen.getByRole("menuitemcheckbox", { name: "Keep chat panel visible" });
+    expect(keep).toHaveAttribute("aria-checked", "false");
+    await userEvent.click(keep);
+    expect(base.onTogglePin).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Conversation options" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "New conversation" }));
+    expect(base.onNewConversation).toHaveBeenCalled();
+  });
+
+  it("invites the first conversation when there are none", () => {
+    render(<SidePanel {...base} threads={[]} />);
+    expect(screen.getByRole("heading", { name: "Start a conversation" })).toBeInTheDocument();
   });
 });
 

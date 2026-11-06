@@ -103,7 +103,7 @@ flowchart TB
 
 | Container | Technology | Responsibility |
 |---|---|---|
-| React SPA | React 18, TypeScript, Vite | Centred sign-in / sign-up card with code entry; sidebar with the signed-in user, New conversation, recent conversations and brand voice; Chat / Content / Research / Export tabs under the conversation title, side-by-side editors with re-scoring, research panel with citations, fact-check badges and credibility ratings, exports; `/admin` dashboard for admins (offline mode, provider priority, quality threshold, configured keys, usage, accounts) |
+| React SPA | React 18, TypeScript, Vite | Centred sign-in / sign-up card with code entry; icon rail (Chat, Content, Research, Export, Brand voice, account initials with Sign out); a slide-out conversations panel with search, New conversation and "Keep chat panel visible"; side-by-side editors with re-scoring, research panel with citations, fact-check badges and credibility ratings, exports; `/admin` dashboard for admins (offline mode, provider priority, quality threshold, configured keys, usage, accounts) |
 | FastAPI app | FastAPI, uvicorn, Pydantic | Auth, conversation and admin endpoints (see [API docs](api_documentation.md)); session checks and conversation ownership; streams per-agent progress over SSE; builds the engine from the admin's saved settings via the `EngineRegistry`; strips server paths; serves the SPA |
 | Auth store | SQLite (`src/auth/`) | Accounts, hashed one-time codes and sessions, each user's conversation list, admin settings ([ADR-0006](adr/0006-email-otp-accounts-and-admin-dashboard.md)) |
 | ContentBlitzEngine | LangGraph | Runs one conversational turn through the supervising graph; reads/writes checkpointed state |
@@ -331,7 +331,7 @@ sequenceDiagram
     B->>A: POST verify {email, code, purpose}
     A->>S: compare hash (≤ 5 tries) · delete code · create user on sign-up · create session (hash)
     A-->>B: {user} + Set-Cookie cb_session (HttpOnly, SameSite=Lax)
-    B->>A: GET /api/threads (cookie) → sidebar: name, New conversation, recent conversations
+    B->>A: GET /api/threads (cookie) → icon rail (initials) and conversations panel: New conversation, recent conversations
 ```
 
 ### 7.4 Research-first campaign
@@ -381,7 +381,7 @@ sequenceDiagram
 
 Memory is `MemorySaver` by default or `SqliteSaver` with `CONTENTBLITZ_MEMORY=sqlite` (the Docker default). Which
 threads belong to whom (and their titles) lives in the auth store; the browser remembers each user's last
-`thread_id` and restores it on reload, and the sidebar lists the rest. Content-tab edits are written back with
+`thread_id` and restores it on reload, and the conversations panel lists the rest. Content-tab edits are written back with
 `graph.update_state(..., as_node="finalize")`. See [ADR-0005](adr/0005-conversation-memory.md).
 
 ---
