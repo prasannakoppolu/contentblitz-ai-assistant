@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Chat } from "../components/Chat";
 import { Dashboard } from "../components/Dashboard";
 import { ExportPanel } from "../components/ExportPanel";
-import { Pipeline, stationStatuses } from "../components/Pipeline";
 import { ResearchPanel } from "../components/ResearchPanel";
 import type { Blog, ConversationState, Quality } from "../types";
 
@@ -86,28 +85,6 @@ describe("Chat", () => {
     expect(screen.getByText("Image generated").tagName).toBe("STRONG");
     expect(screen.getByRole("alert")).toHaveTextContent("Network down");
     expect(screen.getByAltText("Illustration: bees")).toHaveAttribute("src", "/api/images/x.png");
-  });
-});
-
-describe("Pipeline", () => {
-  it("derives station statuses from plan, trace and activity", () => {
-    const st = stationStatuses(
-      ["research", "blog", "image"],
-      [
-        { agent: "query_handler", status: "ok", detail: "" },
-        { agent: "research", status: "error", detail: "" },
-      ],
-      true,
-      "blog",
-    );
-    expect(st).toMatchObject({ query_handler: "ok", research: "error", blog: "active", image: "queued", linkedin: "idle" });
-  });
-
-  it("marks the active station for assistive tech", () => {
-    render(<Pipeline statuses={{ research: "active" }} details={{}} />);
-    const active = screen.getByText("Research").closest("li");
-    expect(active).toHaveAttribute("aria-current", "step");
-    expect(active).toHaveTextContent("Working…");
   });
 });
 

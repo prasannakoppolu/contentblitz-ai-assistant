@@ -122,11 +122,12 @@ def test_login_rejects_unregistered_email_then_signup_and_login_with_codes(brows
     ctx.close()
 
 
-def test_campaign_flow_streams_pipeline_and_fills_every_panel(page):
+def test_campaign_flow_fills_every_panel(page):
     expect = playwright_api.expect
     page.get_by_role("button", name="Create a full campaign about B2B podcast marketing").click()
     expect(page.locator(".msg--assistant")).to_contain_text("Research on B2B podcast marketing", timeout=30000)
-    expect(page.locator(".station--ok")).to_have_count(6)
+    expect(page.locator(".msg__agents").last).to_contain_text("research")
+    expect(page.locator(".pipeline")).to_have_count(0)  # no progress strip above the tabs
     expect(page.locator(".msg__image")).to_be_visible()
 
     page.get_by_role("tab", name="Content").click()

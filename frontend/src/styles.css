@@ -217,7 +217,7 @@ code { font-family: var(--mono); font-size: 0.9em; }
 .masthead .menu-btn { display: none; flex: none; }
 
 /* ---------- segmented tabs ---------- */
-.tabs { display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--fill); flex: none; overflow-x: auto; max-width: 100%; }
+.tabs { display: inline-flex; align-self: flex-start; gap: 2px; padding: 4px; margin-bottom: 18px; border-radius: 999px; background: var(--fill); flex: none; overflow-x: auto; max-width: 100%; }
 .tab {
   font: inherit; font-weight: 500; font-size: var(--step--1); white-space: nowrap;
   display: inline-flex; align-items: center; gap: 6px;
@@ -232,40 +232,6 @@ code { font-family: var(--mono); font-size: 0.9em; }
   background: var(--fill); color: var(--ink-2); cursor: pointer;
 }
 .subtab[aria-selected="true"] { background: var(--ink); color: var(--bg); }
-
-/* ---------- pipeline: six soft chips ---------- */
-.pipeline {
-  list-style: none; margin: 0 0 18px; padding: 0;
-  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px;
-}
-.station {
-  position: relative; display: flex; gap: 10px; align-items: center;
-  padding: 10px 12px; min-width: 0; border-radius: var(--radius-m); background: var(--panel);
-  transition: background-color 0.25s ease, box-shadow 0.25s ease;
-}
-.station__icon { position: relative; flex: none; }
-.station__icon .obj { transition: filter 0.25s ease, opacity 0.25s ease; }
-.station--idle .station__icon .obj { filter: grayscale(0.85); opacity: 0.7; }
-.station__num {
-  position: absolute; right: -5px; bottom: -4px;
-  display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
-  font-size: 0.66rem; font-weight: 700; background: var(--surface); color: var(--ink-3); box-shadow: 0 0 0 2px var(--panel);
-}
-.station__body { display: flex; flex-direction: column; min-width: 0; }
-.station__label { font-weight: 600; font-size: var(--step--1); }
-.station__detail { font-size: 0.75rem; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.station--queued .station__num { color: var(--accent); }
-.station--active { background: var(--surface); box-shadow: 0 0 0 1.5px var(--accent), var(--shadow-float); }
-.station--active .station__num { background: var(--accent); color: var(--on-accent); }
-.station--active .station__detail { color: var(--accent); }
-.station--ok .station__num { background: var(--pass); color: #fff; }
-.station--error { background: var(--issue-soft); }
-.station--error .station__num { background: var(--issue); color: #fff; }
-.station--error .station__detail { color: var(--issue); }
-.station--skipped { opacity: 0.55; }
-@media (prefers-reduced-motion: no-preference) {
-  .station--active .station__icon .obj { animation: bob 1.4s ease-in-out infinite; }
-}
 
 /* ---------- chat ---------- */
 .panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -545,17 +511,15 @@ code { font-family: var(--mono); font-size: 0.9em; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
-  .pipeline { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .split, .research__cols { grid-template-columns: minmax(0, 1fr); }
   .admin__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .masthead { flex-wrap: wrap; }
 }
 @media (max-width: 860px) {
   .app { grid-template-columns: minmax(0, 1fr); }
   .main { padding: 10px 16px 0; }
   .masthead .menu-btn { display: inline-grid; }
-  .masthead .tabs { order: 3; width: 100%; justify-content: space-between; }
-  .masthead .tab { flex: 1; justify-content: center; }
+  .tabs { align-self: stretch; }
+  .tab { flex: 1; justify-content: center; }
   .sidebar {
     position: fixed; inset: 0 auto 0 0; width: min(310px, 86vw); z-index: 20;
     transform: translateX(-105%); transition: transform 0.22s ease; visibility: hidden;
@@ -573,10 +537,6 @@ code { font-family: var(--mono); font-size: 0.9em; }
   .admin__bar .btn { margin-left: auto; }
 }
 @media (max-width: 560px) {
-  .pipeline { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-  .station { flex-direction: column; padding: 8px 4px; gap: 4px; text-align: center; }
-  .station__label { font-size: 0.7rem; }
-  .station__detail { display: none; }
   .masthead__title p { display: none; }
   .page { padding: 18px; }
   .landing__bar { padding: 14px 16px; }
