@@ -147,7 +147,7 @@ export const Icon = {
   ArrowLeft: ({ size = 18, ...p }: IconProps) => <svg {...base(size)} {...p}><path d="M19 12H5M11.5 5.5 5 12l6.5 6.5" /></svg>,
   Check: ({ size = 14, ...p }: IconProps) => <svg {...base(size)} strokeWidth={2.6} {...p}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>,
   X: ({ size = 16, ...p }: IconProps) => <svg {...base(size)} {...p}><path d="M6 6l12 12M18 6 6 18" /></svg>,
-  Menu: ({ size = 20, ...p }: IconProps) => <svg {...base(size)} {...p}><path d="M4 7h16M4 12h16M4 17h10" /></svg>,
+  Menu: ({ size = 20, ...p }: IconProps) => <svg {...base(size)} {...p}><path d="M4 6.5h16M4 12h16M4 17.5h16" /></svg>,
   Copy: ({ size = 15, ...p }: IconProps) => (
     <svg {...base(size)} {...p}><rect x="9" y="9" width="11" height="11" rx="3" /><path d="M15 9V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v5a3 3 0 0 0 3 3h2" /></svg>
   ),
