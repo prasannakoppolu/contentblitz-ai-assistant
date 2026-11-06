@@ -172,9 +172,8 @@ def test_followup_refines_previous_piece_and_survives_reload(page):
 
     # Content opens beside the rail; the top-left button shows which conversation it belongs to.
     page.get_by_role("button", name="Content", exact=True).click()
-    expect(page.locator(".masthead__crumb")).to_have_text("Content")
-    expect(page.locator(".masthead h1")).to_have_text("Write a LinkedIn post about hybrid work")
-    page.get_by_role("button", name="Show conversations").click()
+    expect(page.locator(".masthead__title")).to_have_count(0)  # just the ☰ button up there
+    page.get_by_role("button", name="Chats", exact=True).click()  # ☰ Chats opens the same panel as Chat
     expect(page.locator(".sidepanel")).to_be_visible()
     page.get_by_role("button", name="Conversation options").click()
     page.get_by_role("menuitemcheckbox", name="Keep chat panel visible").click()

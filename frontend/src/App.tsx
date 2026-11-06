@@ -264,19 +264,16 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
         <header className="masthead">
           <button
             type="button"
-            className="icon-btn panel-btn"
-            aria-label={panel === "chats" ? "Hide conversations" : "Show conversations"}
+            className="chats-btn"
             aria-expanded={panel === "chats"}
-            title={panel === "chats" ? "Hide conversations" : "Show conversations"}
             onClick={() => setPanel((p) => (p === "chats" ? null : "chats"))}
           >
-            <Icon.Panel size={20} />
+            <Icon.Menu size={20} />
+            <span>Chats</span>
           </button>
-          <div className="masthead__title">
-            <p className="masthead__crumb">{VIEW_LABEL[view]}</p>
-            <h1>{title}</h1>
-            <p>{state.topic && state.messages.length ? `Topic: ${state.topic}` : `Welcome back, ${firstName}.`}</p>
-          </div>
+          <h1 className="sr-only">
+            {VIEW_LABEL[view]}: {title}
+          </h1>
         </header>
         <div className="panel">
           {view === "chat" && (

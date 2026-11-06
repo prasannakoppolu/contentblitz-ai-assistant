@@ -208,15 +208,13 @@ code { font-family: var(--mono); font-size: 0.9em; }
 .main { padding: 18px 32px 0; min-width: 0; display: flex; flex-direction: column; min-height: 100vh; }
 .boot { max-width: 640px; margin: 15vh auto; padding: 0 16px; }
 
-.masthead { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; min-width: 0; }
-.masthead__title { min-width: 0; flex: 1; }
-.masthead__title h1 {
-  font-size: var(--step-1); font-weight: 600; margin: 0; letter-spacing: -0.01em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.masthead { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; min-width: 0; }
+.chats-btn {
+  flex: none; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 12px;
+  font: inherit; font-weight: 500; color: var(--ink); background: var(--fill); border: 0; border-radius: 999px; cursor: pointer;
 }
-.masthead__title p { color: var(--ink-3); margin: 0; font-size: var(--step--1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.masthead .panel-btn { flex: none; align-self: flex-start; margin-top: 2px; }
-.masthead__crumb { font-size: 0.75rem !important; font-weight: 600; color: var(--accent) !important; margin: 0 0 1px !important; }
+.chats-btn:hover { background: var(--fill-strong); }
+.chats-btn[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
 
 .subtabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
 .subtab {
@@ -568,8 +566,7 @@ code { font-family: var(--mono); font-size: 0.9em; }
   .admin__bar .btn { margin-left: auto; }
 }
 @media (max-width: 560px) {
-  .masthead__title p { display: none; }
-  .page { padding: 18px; }
+    .page { padding: 18px; }
   .landing__bar { padding: 14px 16px; }
   .hero { min-height: calc(100vh - 58px); padding-bottom: 64px; }
   .hero__mark { width: 52px; height: 52px; margin-bottom: 20px; }
