@@ -103,7 +103,7 @@ flowchart TB
 
 | Container | Technology | Responsibility |
 |---|---|---|
-| React SPA | React 18, TypeScript, Vite | Centred sign-in / sign-up card with code entry; sidebar with the signed-in user, New conversation, recent conversations and brand voice; live six-station agent pipeline, side-by-side editors with re-scoring, research panel with citations, fact-check badges and credibility ratings, exports; `/admin` dashboard for admins (offline mode, provider priority, quality threshold, configured keys, usage, accounts) |
+| React SPA | React 18, TypeScript, Vite | Centred sign-in / sign-up card with code entry; sidebar with the signed-in user, New conversation, recent conversations and brand voice; Chat / Content / Research / Export tabs under the conversation title, side-by-side editors with re-scoring, research panel with citations, fact-check badges and credibility ratings, exports; `/admin` dashboard for admins (offline mode, provider priority, quality threshold, configured keys, usage, accounts) |
 | FastAPI app | FastAPI, uvicorn, Pydantic | Auth, conversation and admin endpoints (see [API docs](api_documentation.md)); session checks and conversation ownership; streams per-agent progress over SSE; builds the engine from the admin's saved settings via the `EngineRegistry`; strips server paths; serves the SPA |
 | Auth store | SQLite (`src/auth/`) | Accounts, hashed one-time codes and sessions, each user's conversation list, admin settings ([ADR-0006](adr/0006-email-otp-accounts-and-admin-dashboard.md)) |
 | ContentBlitzEngine | LangGraph | Runs one conversational turn through the supervising graph; reads/writes checkpointed state |

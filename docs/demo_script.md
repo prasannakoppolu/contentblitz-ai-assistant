@@ -1,7 +1,7 @@
 # Demo Video Script (10-15 min)
 
 Record with real keys and SMTP for best output (or `make demo` to show the flow offline, with codes on screen).
-Point at the six-station pipeline as it lights up; open the admin dashboard in a second window for provider chains and usage.
+Point at the reply listing which agents ran; open the admin dashboard in a second window for provider chains and usage.
 
 | # | Time | Show | Say / point out |
 |---|---|---|---|

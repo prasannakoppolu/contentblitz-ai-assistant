@@ -1,17 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, setUnauthorizedHandler, streamChat } from "./api";
 import { AdminPage } from "./components/AdminPage";
 import { AuthScreen } from "./components/AuthScreen";
 import { Chat } from "./components/Chat";
 import { Dashboard } from "./components/Dashboard";
 import { ExportPanel } from "./components/ExportPanel";
-import { Pipeline, stationStatuses } from "./components/Pipeline";
 import { ResearchPanel } from "./components/ResearchPanel";
 import { Sidebar } from "./components/Sidebar";
 import { useToast } from "./components/Toast";
 import { Icon } from "./components/Art";
 import { forgetThread, storeThread, storedThread } from "./settings";
-import type { AppConfig, ConversationState, ThreadSummary, TraceEntry, User } from "./types";
+import type { AppConfig, ConversationState, ThreadSummary, User } from "./types";
 
 type Tab = "chat" | "content" | "research" | "export";
 const TABS: [Tab, string][] = [
@@ -127,7 +126,6 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
   const [running, setRunning] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [live, setLive] = useState<{ plan: string[]; trace: TraceEntry[]; active: string | null }>({ plan: [], trace: [], active: null });
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const refreshThreads = useCallback(() => api.threads().then(({ threads }) => setThreads(threads)).catch(() => undefined), []);
@@ -137,7 +135,6 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
       storeThread(user.id, tid);
       setThreadId(tid);
       setState(st ?? emptyState(tid));
-      setLive({ plan: [], trace: [], active: null });
       setError(null);
       setTab("chat");
       setSidebarOpen(false);
@@ -196,42 +193,19 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
       setPending(message);
       setError(null);
       setTab("chat");
-      setLive({ plan: [], trace: [], active: "query_handler" });
       try {
-        const final = await streamChat(threadId, message, (ev) => {
-          if (ev.event !== "node") return;
-          setLive((prev) => {
-            const plan = ev.data.plan ?? prev.plan;
-            const trace = ev.data.trace ? [...prev.trace, ev.data.trace] : prev.trace;
-            const doneIds = new Set(trace.map((t) => t.agent));
-            const active = ev.data.node === "finalize" ? null : plan.find((a) => !doneIds.has(a)) ?? null;
-            return { plan, trace, active };
-          });
-        });
+        const final = await streamChat(threadId, message, () => undefined);
         setState(final);
       } catch (e) {
         setError(`${(e as Error).message}. Your message wasn't completed; send it again to retry.`);
       } finally {
         setPending(null);
         setRunning(false);
-        setLive((prev) => ({ ...prev, active: null }));
         void refreshThreads();
       }
     },
     [threadId, running, refreshThreads],
   );
-
-  const plan = running ? live.plan : state.plan ?? [];
-  const trace = running ? live.trace : state.trace ?? [];
-  const statuses = useMemo(() => stationStatuses(plan, trace, running, live.active), [plan, trace, running, live.active]);
-  const details = useMemo(() => {
-    const d: Record<string, string> = Object.fromEntries(trace.map((t) => [t.agent, t.detail]));
-    if (d.query_handler !== undefined) {
-      const steps = plan.length;
-      d.query_handler = steps ? `Planned ${steps} step${steps > 1 ? "s" : ""}` : "Asked what to make";
-    }
-    return d;
-  }, [trace, plan]);
 
   const counts: Partial<Record<Tab, number>> = {
     content: [state.blog, state.linkedin, state.image].filter(Boolean).length,
@@ -277,16 +251,15 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
             <h1>{title}</h1>
             <p>{state.topic && state.messages.length ? `Topic: ${state.topic}` : `Welcome back, ${firstName}.`}</p>
           </div>
-          <nav className="tabs" role="tablist" aria-label="Workspace">
-            {TABS.map(([id, label]) => (
-              <button key={id} role="tab" aria-selected={tab === id} className="tab" onClick={() => setTab(id)}>
-                {label}
-                {counts[id] ? <span className="tab__count">{counts[id]}</span> : null}
-              </button>
-            ))}
-          </nav>
         </header>
-        <Pipeline statuses={statuses} details={details} />
+        <nav className="tabs" role="tablist" aria-label="Workspace">
+          {TABS.map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={tab === id} className="tab" onClick={() => setTab(id)}>
+              {label}
+              {counts[id] ? <span className="tab__count">{counts[id]}</span> : null}
+            </button>
+          ))}
+        </nav>
         <div className="panel" role="tabpanel">
           {tab === "chat" && (
             <Chat

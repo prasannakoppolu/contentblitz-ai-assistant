@@ -105,7 +105,7 @@ export function Chat({ messages, running, pending, error, image, onSend, userNam
           <p className="chat__working">
             <span className="msg__avatar msg__avatar--busy" aria-hidden="true"><BrandMark size={18} /></span>
             <span className="dots" aria-hidden="true"><i /><i /><i /></span>
-            The agents are working. Progress shows in the pipeline above.
+            The agents are working on it…
           </p>
         )}
         {error && (
