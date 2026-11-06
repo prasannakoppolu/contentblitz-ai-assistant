@@ -6,19 +6,14 @@ import { Chat } from "./components/Chat";
 import { Dashboard } from "./components/Dashboard";
 import { ExportPanel } from "./components/ExportPanel";
 import { ResearchPanel } from "./components/ResearchPanel";
-import { Sidebar } from "./components/Sidebar";
+import { Rail, type View } from "./components/Rail";
+import { SidePanel, type PanelMode } from "./components/Sidebar";
 import { useToast } from "./components/Toast";
 import { Icon } from "./components/Art";
-import { forgetThread, storeThread, storedThread } from "./settings";
+import { forgetThread, loadPinned, savePinned, storeThread, storedThread } from "./settings";
 import type { AppConfig, ConversationState, ThreadSummary, User } from "./types";
 
-type Tab = "chat" | "content" | "research" | "export";
-const TABS: [Tab, string][] = [
-  ["chat", "Chat"],
-  ["content", "Content"],
-  ["research", "Research"],
-  ["export", "Export"],
-];
+const VIEW_LABEL: Record<View, string> = { chat: "Chat", content: "Content", research: "Research", export: "Export" };
 
 const emptyState = (tid: string): ConversationState => ({ thread_id: tid, messages: [], blog_series: [] });
 
@@ -122,11 +117,12 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
   const [threadId, setThreadId] = useState<string>("");
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [state, setState] = useState<ConversationState>(() => emptyState(""));
-  const [tab, setTab] = useState<Tab>("chat");
+  const [view, setView] = useState<View>("chat");
+  const [pinned, setPinned] = useState<boolean>(() => loadPinned());
+  const [panel, setPanel] = useState<PanelMode | null>(() => (loadPinned() ? "chats" : null));
   const [running, setRunning] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const refreshThreads = useCallback(() => api.threads().then(({ threads }) => setThreads(threads)).catch(() => undefined), []);
 
@@ -136,10 +132,9 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
       setThreadId(tid);
       setState(st ?? emptyState(tid));
       setError(null);
-      setTab("chat");
-      setSidebarOpen(false);
+      setPanel((p) => (pinned && p ? p : null));
     },
-    [user.id],
+    [user.id, pinned],
   );
 
   const newConversation = useCallback(async () => {
@@ -167,7 +162,7 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
   }, [user.id]);
 
   const selectThread = async (tid: string) => {
-    if (tid === threadId) return setSidebarOpen(false);
+    if (tid === threadId) return setPanel((p) => (pinned ? p : null));
     try {
       open(tid, await api.state(tid));
     } catch (e) {
@@ -192,7 +187,7 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
       setRunning(true);
       setPending(message);
       setError(null);
-      setTab("chat");
+      setView("chat");
       try {
         const final = await streamChat(threadId, message, () => undefined);
         setState(final);
@@ -207,7 +202,25 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
     [threadId, running, refreshThreads],
   );
 
-  const counts: Partial<Record<Tab, number>> = {
+  const selectView = (v: View) => {
+    if (v === "chat") {
+      // Chat toggles the conversations panel, like the reference layout.
+      setPanel((p) => (view === "chat" && p === "chats" && !pinned ? null : "chats"));
+    } else if (!pinned) {
+      setPanel(null);
+    } else {
+      setPanel("chats");
+    }
+    setView(v);
+  };
+  const togglePin = () => {
+    const next = !pinned;
+    setPinned(next);
+    savePinned(next);
+    notify(next ? "The chat panel stays open." : "The chat panel hides when you open a page.");
+  };
+
+  const counts: Partial<Record<View, number>> = {
     content: [state.blog, state.linkedin, state.image].filter(Boolean).length,
     research: state.research ? state.research.sources.length : 0,
   };
@@ -216,52 +229,57 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
   const firstName = user.name.split(" ")[0];
 
   return (
-    <div className="app">
-      <Sidebar
+    <div className={`app ${panel ? "app--panel" : ""}`}>
+      <Rail
         user={user}
-        threads={threads}
-        threadId={threadId}
-        onSelectThread={selectThread}
-        onDeleteThread={deleteThread}
-        onNewConversation={() => void newConversation()}
-        voice={state.brand_voice ?? config.brand_voice}
-        onVoiceSaved={(brand_voice) => {
-          setState((s) => ({ ...s, brand_voice }));
-          notify("Brand voice saved for this conversation.");
-        }}
-        onSignOut={onSignOut}
+        view={view}
+        counts={counts}
+        voiceOpen={panel === "voice"}
+        onSelect={selectView}
+        onToggleVoice={() => setPanel((p) => (p === "voice" ? (pinned ? "chats" : null) : "voice"))}
         onOpenAdmin={onOpenAdmin}
-        running={running}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        onSignOut={onSignOut}
       />
-      {sidebarOpen && <div className="scrim" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
+      {panel && (
+        <SidePanel
+          mode={panel}
+          threads={threads}
+          threadId={threadId}
+          onSelectThread={selectThread}
+          onDeleteThread={deleteThread}
+          onNewConversation={() => void newConversation()}
+          voice={state.brand_voice ?? config.brand_voice}
+          onVoiceSaved={(brand_voice) => {
+            setState((s) => ({ ...s, brand_voice }));
+            notify("Brand voice saved for this conversation.");
+          }}
+          running={running}
+          pinned={pinned}
+          onTogglePin={togglePin}
+          onClose={() => setPanel(pinned ? "chats" : null)}
+        />
+      )}
+      {panel && !pinned && <div className="scrim" onClick={() => setPanel(null)} aria-hidden="true" />}
       <main className="main">
         <header className="masthead">
           <button
             type="button"
-            className="icon-btn menu-btn"
-            aria-label="Menu"
-            aria-expanded={sidebarOpen}
-            onClick={() => setSidebarOpen(true)}
+            className="icon-btn panel-btn"
+            aria-label={panel === "chats" ? "Hide conversations" : "Show conversations"}
+            aria-expanded={panel === "chats"}
+            title={panel === "chats" ? "Hide conversations" : "Show conversations"}
+            onClick={() => setPanel((p) => (p === "chats" ? null : "chats"))}
           >
-            <Icon.Menu />
+            <Icon.Panel size={20} />
           </button>
           <div className="masthead__title">
+            <p className="masthead__crumb">{VIEW_LABEL[view]}</p>
             <h1>{title}</h1>
             <p>{state.topic && state.messages.length ? `Topic: ${state.topic}` : `Welcome back, ${firstName}.`}</p>
           </div>
         </header>
-        <nav className="tabs" role="tablist" aria-label="Workspace">
-          {TABS.map(([id, label]) => (
-            <button key={id} role="tab" aria-selected={tab === id} className="tab" onClick={() => setTab(id)}>
-              {label}
-              {counts[id] ? <span className="tab__count">{counts[id]}</span> : null}
-            </button>
-          ))}
-        </nav>
-        <div className="panel" role="tabpanel">
-          {tab === "chat" && (
+        <div className="panel">
+          {view === "chat" && (
             <Chat
               messages={state.messages}
               running={running}
@@ -273,9 +291,9 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
               onCopied={() => notify("Copied to the clipboard.")}
             />
           )}
-          {tab === "content" && <Dashboard state={state} onChange={(patch) => setState((s) => ({ ...s, ...patch }))} />}
-          {tab === "research" && <ResearchPanel state={state} />}
-          {tab === "export" && <ExportPanel state={state} />}
+          {view === "content" && <Dashboard state={state} onChange={(patch) => setState((s) => ({ ...s, ...patch }))} />}
+          {view === "research" && <ResearchPanel state={state} />}
+          {view === "export" && <ExportPanel state={state} />}
         </div>
       </main>
     </div>

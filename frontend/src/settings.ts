@@ -40,3 +40,22 @@ export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
 }
+
+const PIN_KEY = "contentblitz.pinPanel";
+
+/** Whether the conversations panel stays open beside every page. */
+export function loadPinned(): boolean {
+  try {
+    return localStorage.getItem(PIN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function savePinned(on: boolean): void {
+  try {
+    localStorage.setItem(PIN_KEY, on ? "1" : "0");
+  } catch {
+    /* storage unavailable: the choice lasts for this tab */
+  }
+}

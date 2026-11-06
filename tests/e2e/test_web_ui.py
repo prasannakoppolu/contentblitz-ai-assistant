@@ -111,14 +111,18 @@ def test_login_rejects_unregistered_email_then_signup_and_login_with_codes(brows
     pg.get_by_role("button", name="Create account").click()
     expect(pg.get_by_role("heading", name="Check your email")).to_be_visible()
     _enter_code(pg)
-    expect(pg.locator(".account__name")).to_have_text("Nia Newbie")
+    avatar = pg.get_by_role("button", name="Account: Nia Newbie")
+    expect(avatar).to_have_text("NN")
+    pg.get_by_role("button", name="Chat", exact=True).click()
     expect(pg.get_by_role("button", name="New conversation", exact=False).first).to_be_visible()
 
-    pg.get_by_role("button", name="Sign out").click()
+    avatar.click()
+    expect(pg.get_by_role("menu", name="Account")).to_contain_text("newbie@example.com")
+    pg.get_by_role("menuitem", name="Sign out").click()
     pg.get_by_label("Email").fill("newbie@example.com")
     pg.get_by_role("button", name="Continue").click()
     _enter_code(pg)
-    expect(pg.locator(".account__email")).to_have_text("newbie@example.com")
+    expect(pg.get_by_role("button", name="Account: Nia Newbie")).to_be_visible()
     ctx.close()
 
 
@@ -127,20 +131,19 @@ def test_campaign_flow_fills_every_panel(page):
     page.get_by_role("button", name="Create a full campaign about B2B podcast marketing").click()
     expect(page.locator(".msg--assistant")).to_contain_text("Research on B2B podcast marketing", timeout=30000)
     expect(page.locator(".msg__agents").last).to_contain_text("research")
-    expect(page.locator(".pipeline")).to_have_count(0)  # no progress strip above the tabs
     expect(page.locator(".msg__image")).to_be_visible()
 
-    page.get_by_role("tab", name="Content").click()
+    page.get_by_role("button", name="Content", exact=True).click()
     expect(page.locator(".editor__head h2")).to_contain_text("B2B Podcast Marketing")
     article = page.get_by_label("Article (Markdown)")
     article.fill("# Edited title\n\nShort.")
     page.get_by_role("button", name="Save and re-score").click()
     expect(page.locator(".savebar__msg")).to_contain_text("Saved and re-scored.")
 
-    page.get_by_role("tab", name="Research").click()
+    page.get_by_role("button", name="Research", exact=True).click()
     expect(page.locator(".research__sources li")).to_have_count(10)
 
-    page.get_by_role("tab", name="Export").click()
+    page.get_by_role("button", name="Export", exact=True).click()
     with page.expect_download() as dl:
         page.get_by_role("link", name="Markdown").first.click()
     assert dl.value.suggested_filename.endswith(".md")
@@ -157,24 +160,40 @@ def test_followup_refines_previous_piece_and_survives_reload(page):
     expect(page.locator(".msg--assistant").nth(1)).to_contain_text("revised the **linkedin**".replace("**", ""), timeout=30000)
     page.reload()
     expect(page.locator(".msg")).to_have_count(4)  # still signed in; thread restored from memory
+    page.get_by_role("button", name="Chat", exact=True).click()  # opens the conversations panel
     expect(page.locator(".thread--active .thread__title")).to_have_text("Write a LinkedIn post about hybrid work")
 
     page.get_by_role("button", name="New conversation", exact=False).first.click()
+    expect(page.locator(".sidepanel")).to_have_count(0)  # the panel closes after choosing
+    page.get_by_role("button", name="Chat", exact=True).click()
     expect(page.locator(".chat__empty")).to_be_visible()
     page.locator(".thread__open", has_text="Write a LinkedIn post").click()
     expect(page.locator(".msg")).to_have_count(4)
 
+    # Content opens beside the rail; the top-left button shows which conversation it belongs to.
+    page.get_by_role("button", name="Content", exact=True).click()
+    expect(page.locator(".masthead__crumb")).to_have_text("Content")
+    expect(page.locator(".masthead h1")).to_have_text("Write a LinkedIn post about hybrid work")
+    page.get_by_role("button", name="Show conversations").click()
+    expect(page.locator(".sidepanel")).to_be_visible()
+    page.get_by_role("button", name="Conversation options").click()
+    page.get_by_role("menuitemcheckbox", name="Keep chat panel visible").click()
+    page.get_by_role("button", name="Research", exact=True).click()
+    expect(page.locator(".sidepanel")).to_be_visible()  # pinned: stays open across pages
 
-def test_mobile_menu_drawer_and_no_horizontal_scroll(browser, base_url):
+
+def test_mobile_icon_rail_panel_and_no_horizontal_scroll(browser, base_url):
+    expect = playwright_api.expect
     ctx, pg = _new_page(browser, base_url, 390, 844)
     assert pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     sign_up(pg, "mobile@example.com", "Mo Bile")
-    sidebar = pg.locator(".sidebar")
-    assert not sidebar.evaluate("e => e.getBoundingClientRect().right > 0")
-    pg.get_by_role("button", name="Menu", exact=True).click()
-    playwright_api.expect(pg.get_by_role("button", name="Close menu")).to_be_visible()
-    playwright_api.expect(pg.locator(".account__name")).to_have_text("Mo Bile")
+    assert pg.locator(".rail").bounding_box()["width"] <= 64
+    expect(pg.get_by_role("button", name="Account: Mo Bile")).to_have_text("MB")
+    pg.get_by_role("button", name="Chat", exact=True).click()
+    expect(pg.get_by_role("searchbox", name="Search conversations")).to_be_visible()
     assert pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    pg.locator(".scrim").click(position={"x": 300, "y": 400})
+    expect(pg.locator(".sidepanel")).to_have_count(0)
     ctx.close()
 
 
@@ -182,14 +201,16 @@ def test_admin_dashboard_is_only_for_admins(browser, base_url):
     expect = playwright_api.expect
     ctx, pg = _new_page(browser, base_url)
     sign_up(pg, "customer@example.com", "Cus Tomer")
-    expect(pg.get_by_role("link", name="Admin dashboard")).to_have_count(0)
+    pg.get_by_role("button", name="Account: Cus Tomer").click()
+    expect(pg.get_by_role("menuitem", name="Admin dashboard")).to_have_count(0)
     pg.goto(base_url + "/admin")
     expect(pg.get_by_role("heading", name="This page is for administrators")).to_be_visible()
     ctx.close()
 
     ctx, pg = _new_page(browser, base_url)
     sign_up(pg, ADMIN, "Ada Admin")
-    pg.get_by_role("link", name="Admin dashboard").click()
+    pg.get_by_role("button", name="Account: Ada Admin").click()
+    pg.get_by_role("menuitem", name="Admin dashboard").click()
     expect(pg.get_by_role("heading", name="Server dashboard")).to_be_visible()
     expect(pg.get_by_role("heading", name="Usage since the server started")).to_be_visible()
     expect(pg.get_by_label("Offline mode")).to_be_checked()
