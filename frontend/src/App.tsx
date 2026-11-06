@@ -264,13 +264,12 @@ function Workspace({ config, user, onSignOut, onOpenAdmin, notify }: WorkspacePr
         <header className="masthead">
           <button
             type="button"
-            className="icon-btn panel-btn"
-            aria-label={panel === "chats" ? "Hide conversations" : "Show conversations"}
+            className="chats-btn"
             aria-expanded={panel === "chats"}
-            title="Chats"
             onClick={() => setPanel((p) => (p === "chats" ? null : "chats"))}
           >
-            <Icon.Menu size={22} />
+            <Icon.Menu size={20} />
+            <span>Chats</span>
           </button>
           <h1 className="sr-only">
             {VIEW_LABEL[view]}: {title}

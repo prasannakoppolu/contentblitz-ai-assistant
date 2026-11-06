@@ -209,8 +209,12 @@ code { font-family: var(--mono); font-size: 0.9em; }
 .boot { max-width: 640px; margin: 15vh auto; padding: 0 16px; }
 
 .masthead { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; min-width: 0; }
-.masthead .panel-btn { flex: none; align-self: flex-start; margin-top: 2px; width: 42px; height: 42px; border-radius: 12px; color: var(--ink); }
-.masthead .panel-btn[aria-expanded="true"] { background: var(--fill-strong); color: var(--accent); }
+.chats-btn {
+  flex: none; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 12px;
+  font: inherit; font-weight: 500; color: var(--ink); background: var(--fill); border: 0; border-radius: 999px; cursor: pointer;
+}
+.chats-btn:hover { background: var(--fill-strong); }
+.chats-btn[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
 
 .subtabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
 .subtab {
